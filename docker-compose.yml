@@ -37,7 +37,7 @@ services:
     depends_on:
       - zoo1
   
-  akto-api-runtime:
+  hotavneesh/akto-api-runtime:
     image: akto-api-runtime:latest
     container_name: akto-api-runtime
     environment:
