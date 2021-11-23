@@ -4,11 +4,7 @@
 # See https://sipb.mit.edu/doc/safe-shell/
 set -euf -o pipefail
 
-//if [[ "$OSTYPE" == "linux-gnu" ]]; then
-//  export MAYBE_SUDO="sudo"
-//else
-  export MAYBE_SUDO=""
-//fi
+export MAYBE_SUDO=""
 
 if [ -t 1 ]; then
   export NORMAL="$(tput sgr0)"
