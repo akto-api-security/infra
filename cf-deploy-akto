@@ -127,6 +127,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   if ! command_present docker; then
     # shellcheck disable=2016
     log_warn '`docker` not found! Attempting to install. This may take a few minutes.'
+    chmod 700 ./get-docker.sh
     ./get-docker.sh
 
     if ! command_present docker; then
@@ -148,6 +149,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   if ! command_present docker-compose; then
     # shellcheck disable=2016
     log_warn '`docker-compose` not found! Attempting to install'
+    chmod 700 ./get-docker-compose.sh
     ./get-docker-compose.sh
 
     if ! command_present docker-compose; then
