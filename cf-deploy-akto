@@ -5,6 +5,9 @@
 set -euf -o pipefail
 
 export MAYBE_SUDO=""
+pwd
+
+echo "starting....."
 
 if [ -t 1 ]; then
   export NORMAL="$(tput sgr0)"
