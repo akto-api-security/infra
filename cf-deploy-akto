@@ -106,7 +106,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/master.zip  # TODO(hirday): change back to master
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/self_hosting.zip
     log_step 'unpacking...'
     unzip master.zip
     mv infra-master infra
