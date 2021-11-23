@@ -178,7 +178,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   fi
 
   if akto_containers_present; then
-    log_step 'noticed you have tried Retool before, cleaning up...'
+    log_step 'noticed you have tried Akto before, cleaning up...'
     $MAYBE_SUDO docker-compose rm -fsv
   fi
 else
