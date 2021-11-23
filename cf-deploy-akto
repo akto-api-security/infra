@@ -77,10 +77,10 @@ akto_trial_running() {
 }
 
 # NB: trim trailing slash on $TMPDIR as different OS's do it differently
-INSTALL_DIRECTORY="$HOME/akto"
+INSTALL_DIRECTORY="~/akto"
 DOCKER_CONTEXT="$INSTALL_DIRECTORY/infra"
 
-cd "$HOME"
+cd "~"
 
 if [ ! -d "$DOCKER_CONTEXT" ]; then
   if [ -d "$INSTALL_DIRECTORY" ]; then
