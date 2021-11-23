@@ -80,7 +80,7 @@ akto_trial_running() {
 INSTALL_DIRECTORY="~/akto"
 DOCKER_CONTEXT="$INSTALL_DIRECTORY/infra"
 
-cd "~"
+cd ~
 
 if [ ! -d "$DOCKER_CONTEXT" ]; then
   if [ -d "$INSTALL_DIRECTORY" ]; then
