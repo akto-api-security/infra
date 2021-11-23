@@ -109,7 +109,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/self_hosting.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-master infra
+    mv infra-feature-self_hosting infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
@@ -207,6 +207,24 @@ $MAYBE_SUDO docker-compose up -d
 echo ""
 echo " -- ${GREEN}${BOLD}!! AKTO IS BOOTING !!${NORMAL} --"
 
+
+while ! nc -z localhost 8080; do   
+  sleep 1 # wait for 1/10 of the second before check again
+done
+
+WAITED=0
+
+sp="/-\|"
+echo -n ' '
+i=0
+while [ $WAITED -lt 100 ]; do
+  WAITED=$((WAITED + 1))
+  sleep 0.1
+  printf "\b${sp:i++%${#sp}:1}"
+done
+
+
+echo " -- ${GREEN}${BOLD}!! AKTO LAUNCHED !!${NORMAL} --"
 
 
 # NB: empty stuff to fully wipe out previous line completely
