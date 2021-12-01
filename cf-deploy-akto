@@ -119,7 +119,6 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   DOCKER_CONTEXT="$(pwd)"
 
   log_step 'setting environment variables'
-  cp ./docker.env.trial docker.env
   read -p "Enter your license key: " licenseKey
   echo "LICENSE_KEY=$licenseKey" >> docker.env
 
