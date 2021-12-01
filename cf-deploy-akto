@@ -203,7 +203,8 @@ $MAYBE_SUDO docker-compose pull
 
 log_step "running Akto! ${WHITE}${BOLD}This can take up to 5 minutes${NORMAL}"
 
-$MAYBE_SUDO docker-compose up -d
+export AKTO_KAFKA_IP=$(curl http://127.0.0.1/latest/meta-data/local-ipv4)
+$MAYBE_SUDO docker-compose up
 
 echo ""
 echo " -- ${GREEN}${BOLD}!! AKTO IS BOOTING !!${NORMAL} --"
