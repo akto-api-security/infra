@@ -1,4 +1,4 @@
-version: '3.5'
+version: '3.3'
 
 services:
   zoo1:
@@ -11,9 +11,6 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_SERVERS: zoo1:2888:3888
-    volumes:
-      - '/vol1/zk-data:/var/lib/zookeeper/data'
-      - '/vol2/zk-txn-logs:/var/lib/zookeeper/log'
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
@@ -23,7 +20,7 @@ services:
       - "9092:9092"
       - "9999:9999"
     environment:
-      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL://${AKTO_KAFKA_IP}:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
       KAFKA_ZOOKEEPER_CONNECT: "zoo1:2181"
@@ -32,15 +29,30 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_CREATE_TOPICS: "akto.api.logs:3:3"
-    volumes:
-      - /vol3/kafka-data:/var/lib/kafka/data
     depends_on:
       - zoo1
-  
-  akto-api-runtime:
-    image: hotavneesh/akto-api-runtime:latest
-    container_name: akto-api-runtime
-    environment:
-      AKTO_ACCOUNT_ID: 4444
+
+  mongo:
+    container_name: mongo
+    image: mongo
+    volumes:
+      - ./data:/data/db
+    ports:
+      - "27017:27017"
+
+  akto-api-security-dashboard:
+    image: aktosecurity/akto-api-security-dashboard:latest
+    env_file: ./docker.env
+    ports: 
+      - "8080:8080"
+    depends_on:
+      - mongo
+
+  akto-api-security-runtime:
+    image: aktosecurity/akto-api-security-runtime:latest
+    env_file: ./docker.env
     depends_on:
       - kafka1
+      - mongo
+
+
