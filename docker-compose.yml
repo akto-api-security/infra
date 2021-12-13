@@ -49,7 +49,7 @@ services:
       - mongo
 
   akto-api-security-runtime:
-    image: aktosecurity/akto-api-security-runtime:debug
+    image: aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker.env
     depends_on:
       - kafka1
