@@ -13,6 +13,10 @@ Parameters:
     Description: ECS Cluster name
     Type: String
     Default: ''
+  InstancesPerSource:
+    Description: Number of instances to be mirrored per Load Balancer/Target Group/ECSCluster. To mirror traffic from all instances, enter any number less than 1. AWS currently limits traffic mirroring to 10 instances. If you want more source instances, please email to support@akto.io.
+    Type: Number
+    Default: 1  
   TargetENI:
     Description: ENI id of target interface
     Type: String
@@ -218,6 +222,7 @@ Resources:
       SourceECS: !Ref SourceECSCluster
       MirrorTarget: !Ref TrafficMirrorTarget
       MirrorFilter: !Ref LBTrafficMirrorFilter
+      SampleSize: !Ref InstancesPerSource
       ECSMirrorFilter: !If
         - CreateMirroringSessionForECS
         - !Ref ECSTrafficMirrorFilter
@@ -249,6 +254,7 @@ Resources:
             - !Ref ECSTrafficMirrorFilter
             - ''
           TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
+          SAMPLE_SIZE: !Ref InstancesPerSource
 
       Code:
         ZipFile: >
@@ -274,6 +280,7 @@ Resources:
 
           var sourceECS = process.env.ECS_NAME;
 
+          var sampleSize = process.env.SAMPLE_SIZE;
 
           function filterDuplicates(value, index, self) {
               return self.indexOf(value) === index;
@@ -314,6 +321,7 @@ Resources:
               console.log("elbv2 describeTargetGroups ", JSON.stringify(targetGroups));
               if (!isError && targetGroups.TargetGroups != undefined) {
                   for (j = 0; j < targetGroups.TargetGroups.length; j++) {
+                      var counter = sampleSize < 1 ? targetGroups.TargetGroups.length : sampleSize
                       isError = false;
                       params = {
                           TargetGroupArn: targetGroups.TargetGroups[j].TargetGroupArn
@@ -333,9 +341,10 @@ Resources:
                                       ]
                                   }]
                               };
-                              for (k = 0; k < backends.TargetHealthDescriptions.length; k++) {
+                              for (k = 0; k < backends.TargetHealthDescriptions.length && counter > 0; k++) {
                                   params.Filters[0].Values.push(backends.TargetHealthDescriptions[k].Target.Id)
                                   allPorts.push(backends.TargetHealthDescriptions[k].Target.Port)
+                                  counter -- 
                               }
                               if (params.Filters[0].Values.length > 0) {
                                   var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
@@ -363,9 +372,10 @@ Resources:
                                       ]
                                   }]
                               };
-                              for (k = 0; k < backends.TargetHealthDescriptions.length; k++) {
+                              for (k = 0; k < backends.TargetHealthDescriptions.length && counter > 0; k++) {
                                   params.Filters[0].Values.push(backends.TargetHealthDescriptions[k].Target.Id)
                                   allPorts.push(backends.TargetHealthDescriptions[k].Target.Port)
+                                  counter -- 
                               }
                               if (params.Filters[0].Values.length > 0) {
                                   var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
@@ -654,8 +664,10 @@ Resources:
                               ]
                           }]
                       };
-                      for (j = 0; j < data.LoadBalancerDescriptions[i].Instances.length; j++) {
+                      var counter = sampleSize < 1 ? targetGroups.TargetGroups.length : sampleSize
+                      for (j = 0; j < data.LoadBalancerDescriptions[i].Instances.length && counter > 0; j++) {
                           params.Filters[0].Values[j] = data.LoadBalancerDescriptions[i].Instances[j].InstanceId
+                          counter --
                       }
                       console.log("elb eni params", JSON.stringify(params));
                       if (params.Filters[0].Values.length > 0) {
@@ -732,14 +744,15 @@ Resources:
                           isError = true;
                       });
                       console.log(JSON.stringify(taskDetails))
+                      var counter = sampleSize < 1 ? taskDetails.tasks.length : sampleSize
                       for (var taskDetailsIndex = 0; taskDetailsIndex < taskDetails.tasks.length; taskDetailsIndex++) {
                           if (taskDetails.tasks[taskDetailsIndex].attachments != undefined) {
                               for (var attachmentIndex = 0; attachmentIndex < taskDetails.tasks[taskDetailsIndex].attachments.length; attachmentIndex++) {
                                   let eni = taskDetails.tasks[taskDetailsIndex].attachments[attachmentIndex].details.find(o => o.name === 'networkInterfaceId');
-                                  if (eni != undefined) {
+                                  if (eni != undefined && counter > 0) {
                                       eniList.push(eni.value)
+                                      counter--
                                   }
-
                               }
                           }
                       }
@@ -905,7 +918,7 @@ Resources:
         - - !Ref 'AWS::StackName'
           - '-'
           - PeriodicRule
-      ScheduleExpression: rate(5 minutes)
+      ScheduleExpression: rate(15 minutes)
       State: ENABLED
       Targets:
         - Arn: !GetAtt
