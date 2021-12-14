@@ -1,0 +1,216 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template does a simple setup for all Akto modules. It sets up all modules on a single instance. If you want a scalable and flexible setup, please contact support@akto.io.",
+    "Parameters": {
+        "VPC": {
+            "Description": "The VPC where Akto will run",
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        "SubnetId": {
+            "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
+            "Type": "AWS::EC2::Subnet::Id",
+            "ConstraintDescription": "must be an existing subnet"
+        },        
+        "LicenseKey": {
+            "Description": "License Key for your akto deployment. Get yours at my.akto.io",
+            "Type": "String"
+        },
+        "AktoInstanceType": {
+            "Description": "Instance type to be allocated to Akto",
+            "ConstraintDescription": "Must be a valid EC2 instance type",
+            "Type": "String",
+            "Default": "m4.xlarge",
+            "AllowedValues": [
+                "m4.large",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m4.10xlarge",
+                "m4.16xlarge"
+            ]
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Designer": {
+            "01a51caa-b901-42f9-bd49-62222c5367a1": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -133.5,
+                    "y": -25
+                },
+                "z": 0,
+                "embeds": []
+            },
+            "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -3.5,
+                    "y": -9.666666666666666
+                },
+                "z": 0,
+                "embeds": [],
+                "isassociatedwith": [
+                    "01a51caa-b901-42f9-bd49-62222c5367a1"
+                ]
+            }
+        }
+    },
+    "Resources": {
+        "AktoSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "GroupDescription": "Enable the ports Akto requires (80, 443, 22, 8080, 8190, 4789, 9092)",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8190,
+                        "ToPort": 8190,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 9092,
+                        "ToPort": 9092,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "udp",
+                        "FromPort": 4789,
+                        "ToPort": 4789,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 0,
+                        "ToPort": 65535,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "01a51caa-b901-42f9-bd49-62222c5367a1"
+                }
+            }
+        },
+        "AktoInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "AktoSecurityGroup"
+                    }
+                ],
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Akto instance"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "50"
+                        }
+                    }
+                ],
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/self_hosting/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    { "Fn::Sub": [
+                        "./cf-deploy-akto < <(echo '${LicKey}')",
+                        { "LicKey": {"Ref" : "LicenseKey" }}]},
+                    {"Fn::Join": ["", 
+                    ["sudo /opt/aws/bin/cfn-signal -s true",
+                    "         --stack ", { "Ref" : "AWS::StackName" },
+                    "         --resource AktoInstance",
+                    "         --region ", { "Ref" : "AWS::Region" }]]}
+                    ]]
+                }}
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "URL": {
+          "Value": {
+            "Fn::Join": [
+              "",
+              [
+                "http://",
+                {
+                  "Fn::GetAtt": [
+                    "AktoInstance",
+                    "PublicIp"
+                  ]
+                },
+                ":8080"
+              ]
+            ]
+          },
+          "Description": "Newly created application URL"
+        }
+    }    
+}
