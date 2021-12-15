@@ -60,6 +60,9 @@
         "HealthCheckPath": "/api/books",
         "Port" : 8000,
         "Protocol" : "HTTP",
+        "Matcher": {
+          "HttpCode": "200-299"
+        },
         "UnhealthyThresholdCount" : 2,
         "VpcId" : {"Ref" : "VpcId"},
         "Targets" : [ 
