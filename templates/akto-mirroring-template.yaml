@@ -2,19 +2,19 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: AWS cloudFormation template to configure traffic mirroring sessions
 Parameters:
   SourceLBs:
-    Description: Comma separated list of loadblancer names
+    Description: 'Comma separated list of loadblancer names ( eg: lb1, lb2, lb3 )'
     Type: CommaDelimitedList
     Default: ''
   SourceTargetGroups:
-    Description: Comma separated list of Target Group names
+    Description: 'Comma separated list of Target Group names ( eg: tg1, tg2, tg3 )'
     Type: CommaDelimitedList
     Default: ''
   SourceECSCluster:
-    Description: ECS Cluster name
+    Description: 'ECS Cluster name ( eg: cluster1 )'
     Type: String
     Default: ''
   InstancesPerSource:
-    Description: Number of instances to be mirrored per Load Balancer/Target Group/ECSCluster. To mirror traffic from all instances, enter any number less than 1. AWS currently limits traffic mirroring to 10 instances. If you want more source instances, please email to support@akto.io.
+    Description: Number of instances to be mirrored per resource group (Load Balancer/Target Group/ECSCluster. (To mirror traffic from all instances, enter any number less than 1. AWS currently limits traffic mirroring to 10 instances. If you want more source instances, please email to support@akto.io.
     Type: Number
     Default: 1  
   TargetENI:
