@@ -43,6 +43,7 @@ services:
   akto-api-security-dashboard:
     image: aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker.env
+    restart: always
     ports: 
       - "8080:8080"
     depends_on:
@@ -51,6 +52,7 @@ services:
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker.env
+    restart: always
     depends_on:
       - kafka1
       - mongo
@@ -58,6 +60,7 @@ services:
   akto-api-security-mirror-api-logging:
     image: aktosecurity/mirror-api-logging:latest
     env_file: ./docker.env
+    restart: always
     depends_on:
       - kafka1
     ports:
