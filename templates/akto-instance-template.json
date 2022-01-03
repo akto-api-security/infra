@@ -135,11 +135,6 @@
         "AktoInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "AktoSecurityGroup"
-                    }
-                ],
                 "InstanceType": {
                     "Ref": "AktoInstanceType"
                 },
@@ -162,6 +157,14 @@
                         }
                     }
                 ],
+                "NetworkInterfaces": [
+                    {
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
+                    }
+                ],        
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
                     "#!/bin/bash -xe",
                     "touch /tmp/hello.txt",
