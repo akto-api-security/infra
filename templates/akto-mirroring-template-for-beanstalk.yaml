@@ -99,6 +99,7 @@ Resources:
       MirrorTarget: !Ref TrafficMirrorTarget
       MirrorFilter: !Ref EBTrafficMirrorFilter
       SampleSize: !Ref InstancesPerEBEnvironment
+      TargetENI: !Ref TargetENI      
     DependsOn: LambdaLogGroup
   
   CreateMirrorSession:
@@ -121,6 +122,7 @@ Resources:
           TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
           TRAFFIC_MIRROR_FILTER_ID: !Ref EBTrafficMirrorFilter
           TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
+          TARGET_ENI: !Ref TargetENI
       
       Code:
         ZipFile: >
@@ -133,12 +135,41 @@ Resources:
 
             var mirrorSessionNumber = process.env.TRAFFIC_MIRROR_SESSION_NUMBER;
             var sampleSize = process.env.SAMPLE_SIZE;
+            var targetENI = process.env.TARGET_ENI;
 
             var EBEnvironmentNamesArray = process.env.EB_ENV_NAMES.split(",").map(item=>item.trim());
 
             function filterDuplicates(value, index, self) {
                           return self.indexOf(value) === index;
                       }
+
+            function calcVxLanId(name) {
+              var hash = 0;
+              if (name.length == 0) return hash;
+              for (var i = 0; i < name.length; i++) {
+                var char = name.charCodeAt(i);
+                hash = ((hash<<5)-hash)+char;
+                hash = hash & hash; // Convert to 32bit integer
+              }
+              return hash & ((2<<20)-1);
+            }
+            async function getAktoInstanceDetails() {
+              var ec2 = new aws.EC2();
+              var params = {
+                  Filters: [{
+                      Name: "network-interface.network-interface-id",
+                      Values: [
+                        targetENI
+                      ]
+                  }]
+              };
+              console.log("ec2 describeInstances ", JSON.stringify(params));
+              var instances = await ec2.describeInstances(params).promise().catch((err) => {
+                  console.error(err);
+              });
+              console.log("ec2 describeInstances ", JSON.stringify(instances));
+              return instances.Reservations[0].Instances[0];
+            }
                       
             async function getEnisAndPortOfInstancesInEBEnv(EBEnvironmentName, allPorts, eniList)
             {
@@ -208,7 +239,7 @@ Resources:
                             // Use only primary interface
                             if(enis.NetworkInterfaces[j].Attachment != undefined && enis.NetworkInterfaces[j].Attachment.DeviceIndex == 0)
                             {
-                                eniList.push(enis.NetworkInterfaces[j].NetworkInterfaceId);
+                                eniList.push([EBEnvironmentName, enis.NetworkInterfaces[j].NetworkInterfaceId]);
                             }
                         }
                     }
@@ -255,10 +286,11 @@ Resources:
 
             async function  createMirroringSession(eni,sessionNumber,filterId,successEnis,failedEnis) {
                 var params = {
-                    NetworkInterfaceId: eni,
+                    NetworkInterfaceId: eni[1],
                     SessionNumber: parseInt(sessionNumber),
                     TrafficMirrorFilterId: filterId,
-                    TrafficMirrorTargetId: trafficMirrorTargetID
+                    TrafficMirrorTargetId: trafficMirrorTargetID,
+                    VirtualNetworkId: calcVxLanId(eni[0])
                 };
                 
                 console.log("params: "+JSON.stringify(params));
@@ -418,6 +450,14 @@ Resources:
                     var responseData = {};
                     responseData['successEnis'] = JSON.stringify(successEnis);
                     responseData['failedEnis'] = JSON.stringify(failedEnis);
+
+
+                    var aktoDetails = await getAktoInstanceDetails();
+                    responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                    responseData['SubnetId'] = [aktoDetails.SubnetId];
+                    responseData['SecurityGroups'] = aktoDetails.SecurityGroups.map(x => x.GroupId);
+
+
                     console.log("Result : "+JSON.stringify(responseData));
                     await response.send(event, context, "SUCCESS", responseData);
                 }
@@ -560,7 +600,78 @@ Resources:
                 Resource:
                   - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
 
- 
+ 		      Environment:
+        Variables:
+          PRIVATE_IP: !GetAtt
+            - CustomSourceENIs
+            - kafkaIp
+          SUCCESS_ENIS: !GetAtt
+            - CustomSourceENIs
+            - successEnis
+      Code:
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/mirroring-collections.zip'
+      Description: Send collection name to id mapping to Akto modules
+      TracingConfig:
+        Mode: Active
+  LambdaLogGroupVPC:
+    Type: 'AWS::Logs::LogGroup'
+    Condition: CreateMirroringSession
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SaveCollectionNames}'
+      RetentionInDays: 7
+  LambdaLogPermissionsVPC:
+    Type: 'AWS::IAM::Policy'
+    Condition: CreateMirroringSession
+    Properties:
+      Roles:
+        - !Ref LambdaVPCAccessRole
+      PolicyName: !Sub '${AWS::Region}-LambdaLogGroup'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${SaveCollectionNames}
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${SaveCollectionNames}:*
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${SaveCollectionNames}:*:*
+  PeriodicEventRuleVPC:
+    Type: 'AWS::Events::Rule'
+    Condition: CreateMirroringSession
+    Properties:
+      Description: Generate an event periodically
+      Name: !Join
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-'
+          - PeriodicRuleVPC
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt
+            - SaveCollectionNames
+            - Arn
+          Id: !Ref SaveCollectionNames
+      
+  PeriodicEventPermissionVPC:
+    Type: 'AWS::Lambda::Permission'
+    Condition: CreateMirroringSession
+    Properties:
+      FunctionName: !GetAtt
+        - SaveCollectionNames
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt
+        - PeriodicEventRuleVPC
+        - Arn
 Outputs:
   successEniList:
     Description: Successful ENI list
