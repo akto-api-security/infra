@@ -1075,8 +1075,8 @@ Resources:
             - CustomSourceENIs
             - successEnis
       Code:
-        S3Bucket: cf-templates-3jie41lht0xk-us-east-1
-        S3Key: mirroring-collections.zip
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/mirroring-collections.zip'
       Description: Send collection name to id mapping to Akto modules
       TracingConfig:
         Mode: Active
