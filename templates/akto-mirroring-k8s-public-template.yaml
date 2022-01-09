@@ -182,8 +182,8 @@ Resources:
           SAMPLE_SIZE: !Ref InstancesPerService
           TARGET_ENI: !Ref TargetENI
       Code:
-        S3Bucket: cf-templates-3jie41lht0xk-us-east-1
-        S3Key: k8s_mirroring_lambda.zip
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/k8s_mirroring_public_lambda.zip'
       Description: Auto create mirroring configuration
       TracingConfig:
         Mode: Active
