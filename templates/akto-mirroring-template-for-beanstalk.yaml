@@ -600,7 +600,48 @@ Resources:
                 Resource:
                   - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
 
- 		      Environment:
+  LambdaVPCAccessRole:
+    Type: 'AWS::IAM::Role'
+    Condition: CreateMirroringSession
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: LambdaBasicAccessVPCPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:AttachNetworkInterface'
+                Resource: '*'
+  SaveCollectionNames:
+    Type: 'AWS::Lambda::Function'
+    Condition: CreateMirroringSession
+    Properties:
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt
+        - LambdaVPCAccessRole
+        - Arn
+      Handler: nodejs/index.handler
+      VpcConfig:
+        SecurityGroupIds: !GetAtt 
+          - CustomSourceENIs
+          - SecurityGroups
+        SubnetIds: !GetAtt 
+          - CustomSourceENIs
+          - SubnetId
+      Environment:
         Variables:
           PRIVATE_IP: !GetAtt
             - CustomSourceENIs
