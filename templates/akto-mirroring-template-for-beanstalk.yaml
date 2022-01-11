@@ -4,7 +4,6 @@ Parameters:
   EBEnvironmentNames:
     Description: 'List of Elastic Beanstalk environment Names to configure traffic mirroring session to'
     Type: CommaDelimitedList
-    Default: 'Myapp-env'
   InstancesPerEBEnvironment:
     Description: 'Number of instances to be mirrored per Beanstalk environment'
     Type: Number
@@ -18,7 +17,6 @@ Parameters:
   TargetENI:
     Description: 'ENI Id of target network interface'
     Type: String
-    Default: 'eni-0108cedbaf2bb4339'
   TargetLB:
     Description: Target Loadbalancer ARN
     Type: String
