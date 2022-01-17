@@ -454,6 +454,7 @@ Resources:
                     responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
                     responseData['SubnetId'] = [aktoDetails.SubnetId];
                     responseData['SecurityGroups'] = aktoDetails.SecurityGroups.map(x => x.GroupId);
+                    responseData['VpcId'] = aktoDetails.VpcId;
 
 
                     console.log("Result : "+JSON.stringify(responseData));
@@ -622,6 +623,19 @@ Resources:
                   - 'ec2:DeleteNetworkInterface'
                   - 'ec2:AttachNetworkInterface'
                 Resource: '*'
+  LambdaSecurityGroupVPC:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt 
+        - CustomSourceENIs
+        - VpcId
+      GroupDescription: "Security group is required to create a lambda inside a VPC"
+      
+      SecurityGroupEgress: 
+        - IpProtocol: "tcp"
+          FromPort: 9092
+          ToPort: 9092
+          CidrIp: "0.0.0.0/0"
   SaveCollectionNames:
     Type: 'AWS::Lambda::Function'
     Condition: CreateMirroringSession
@@ -633,9 +647,10 @@ Resources:
         - Arn
       Handler: nodejs/index.handler
       VpcConfig:
-        SecurityGroupIds: !GetAtt 
-          - CustomSourceENIs
-          - SecurityGroups
+        SecurityGroupIds: 
+          - !GetAtt 
+            - LambdaSecurityGroupVPC 
+            - GroupId
         SubnetIds: !GetAtt 
           - CustomSourceENIs
           - SubnetId
