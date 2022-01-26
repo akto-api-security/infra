@@ -199,6 +199,7 @@ Resources:
           TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
           SAMPLE_SIZE: !Ref InstancesPerSource
           TARGET_ENI: !Ref TargetENI
+          TARGET_LB: !Ref TargetLB
       Code:
         ZipFile: >
           var aws = require('aws-sdk')
@@ -210,7 +211,7 @@ Resources:
 
           var trafficMirrorFilterID = process.env.TRAFFIC_MIRROR_FILTER_ID;
 
-       
+               
 
           var mirrorSessionNumber = process.env.TRAFFIC_MIRROR_SESSION_NUMBER;
 
@@ -223,11 +224,13 @@ Resources:
 
 
           var sampleSize = process.env.SAMPLE_SIZE;
+          
           var targetENI = process.env.TARGET_ENI;
+          var targetLB = process.env.TARGET_LB;
+          
           function filterDuplicates(value, index, self) {
               return self.indexOf(value) === index;
           }
-
 
           function existIn2dArray(src, key) {
               var matched = false;
@@ -257,6 +260,64 @@ Resources:
             }
             return hash & ((2<<20)-1);
           }
+
+          async function getAktoLBDetails()
+          {
+            var elb = new aws.ELBv2();
+              var params = {
+                  "LoadBalancerArns" : [targetLB]
+              };
+
+
+              console.log("Getting Akto LB Details : ", JSON.stringify(params));
+
+              var LBDesc = await elb.describeLoadBalancers(params).promise().catch(err=>{
+                console.log("Error describing Akto LB",err);
+              });
+              
+              if(!LBDesc.LoadBalancers[0])
+              {
+                console.log("Could not find Akto Load Balancer");
+                return ;
+              }
+              
+              LBDesc = LBDesc.LoadBalancers[0];
+
+              var LBName = targetLB.substring(targetLB.indexOf('/')+1);
+              // LBname to get private ip of ENI of LB 
+
+             var eniDesc = 'ELB '+LBName;
+              var ec2 = new aws.EC2();
+              params = {
+                Filters: [{
+                  'Name' : 'description',
+                  'Values' : [eniDesc]
+                }]
+              };
+              
+              var ENIDesc = await ec2.describeNetworkInterfaces(params).promise().catch(err=>{
+                    console.log("Error getting ENI Details of ENI with Description ",eniDesc, " error : ",err); 
+              });
+              
+              if(!ENIDesc.NetworkInterfaces[0])
+              {
+                console.log("Coud not find Network Interface Details");
+                return ;
+                
+              }
+              
+              console.log("ENIDesc: ",ENIDesc);
+              
+              LBDesc.PrivateIpAddress  = ENIDesc.NetworkInterfaces[0].PrivateIpAddress;
+              LBDesc.Subnets = LBDesc.AvailabilityZones.map(x=>x.SubnetId);
+              
+              
+              
+              console.log("LoadBalancerDescription : ",JSON.stringify(LBDesc));
+              return LBDesc;
+              
+          }
+
 
           async function getAktoInstanceDetails() {
             var ec2 = new aws.EC2();
@@ -758,21 +819,49 @@ Resources:
                       await response.send(event, context, "SUCCESS");
                       return;
                   }
+
+                   if(targetENI.length == 0 && targetLB.length == 0)
+                    {
+                      console.log("One destination required to set up mirroring. No found");
+                       await response.send(event,context, "FAILED");
+                       return;
+                    }
+                    
+                    if(targetENI.length !=0 && targetLB.length !=0)
+                    {
+                      console.log("Both targetENI and targetLB found. Only one has to be provided");
+                      await response.send(event,context, "FAILED");
+                      return;
+                    }
                   var successEnis = [];
                   var failedEnis = [];
                  
                   await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
 
+
+  
                   console.log(JSON.stringify(failedEnis))
                   var responseData = {};
                   responseData['successEnis'] = JSON.stringify(successEnis);
                   responseData['failedEnis'] = JSON.stringify(failedEnis);
 
-                  var aktoDetails = await getAktoInstanceDetails();
-                  responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                  responseData['SubnetId'] = [aktoDetails.SubnetId];
-                  responseData['SecurityGroups'] = aktoDetails.SecurityGroups.map(x => x.GroupId);
-
+                   if(targetENI.length !=0 )
+                    {
+                    // when targetEni is given
+                      var aktoDetails = await getAktoInstanceDetails();
+                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                      responseData['SubnetId'] = [aktoDetails.SubnetId];
+                      responseData['VpcId'] = aktoDetails.VpcId;
+  
+                    }
+                    else 
+                    {
+                    // when targetLB is given
+                      var aktoDetails = await getAktoLBDetails();
+                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                      responseData['SubnetId'] = aktoDetails.Subnets;
+                      responseData['VpcId'] = aktoDetails.VpcId;
+                    }
                   await response.send(event, context, "SUCCESS", responseData);
               }
 
@@ -872,6 +961,21 @@ Resources:
                   - 'ec2:DeleteNetworkInterface'
                   - 'ec2:AttachNetworkInterface'
                 Resource: '*'
+  
+  LambdaSecurityGroupVPC:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt 
+        - CustomSourceENIs
+        - VpcId
+      GroupDescription: "Security group is required to create a lambda inside a VPC"
+      
+      SecurityGroupEgress: 
+        - IpProtocol: "tcp"
+          FromPort: 9092
+          ToPort: 9092
+          CidrIp: "0.0.0.0/0"
+      
   SaveCollectionNames:
     Type: 'AWS::Lambda::Function'
     Condition: CreateMirroringSession
@@ -883,9 +987,10 @@ Resources:
         - Arn
       Handler: nodejs/index.handler
       VpcConfig:
-        SecurityGroupIds: !GetAtt 
-          - CustomSourceENIs
-          - SecurityGroups
+        SecurityGroupIds: 
+          - !GetAtt 
+            - LambdaSecurityGroupVPC 
+            - GroupId
         SubnetIds: !GetAtt 
           - CustomSourceENIs
           - SubnetId
