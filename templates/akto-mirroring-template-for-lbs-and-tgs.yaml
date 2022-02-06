@@ -175,6 +175,7 @@ Resources:
       MirrorFilter: !Ref LBTrafficMirrorFilter
       SampleSize: !Ref InstancesPerSource
       TargetENI: !Ref TargetENI
+      TargetLB: !Ref TargetLB
     DependsOn: LambdaLogGroup
   CreateMirrorSession:
     Type: 'AWS::Lambda::Function'
@@ -185,7 +186,7 @@ Resources:
       Role: !GetAtt
         - LambdaBasicExecutionRole
         - Arn
-      Handler: CreateMirroringSession/index.LoadBalancerAndTargetGroupHandler
+      Handler: index.LoadBalancerAndTargetGroupHandler
       Environment:
         Variables:
           ELB_NAMES: !Join
@@ -201,8 +202,8 @@ Resources:
           TARGET_ENI: !Ref TargetENI
           TARGET_LB: !Ref TargetLB
       Code:
-        S3Bucket: aktotestbucket
-        S3Key: CreateMirroringSession.zip
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/CreateMirroringSession.zip'
       Description: Auto create mirroring configuration
       TracingConfig:
         Mode: Active

@@ -100,8 +100,7 @@
                 }
             }
         },
-        "AktoNetworkInterface":
-        {
+        "AktoNetworkInterface": {
             "Type" : "AWS::EC2::NetworkInterface",
             "Properties" : {
                 "SubnetId": {"Ref": "SubnetId"},
@@ -206,7 +205,7 @@
         "AktoDashboardTargetGroup"  :{
             "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties" : {
-                "Port" : "80",
+                "Port" : "8080",
                 "Protocol" : "TCP",
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},

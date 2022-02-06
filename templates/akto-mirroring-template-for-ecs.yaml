@@ -196,7 +196,7 @@ Resources:
       Role: !GetAtt
         - LambdaBasicExecutionRole
         - Arn
-      Handler: CreateMirroringSession/index.ECShandler
+      Handler: index.ECShandler
       Environment:
         Variables:
           ECS_NAME: !Ref SourceECSCluster
@@ -210,8 +210,8 @@ Resources:
           TARGET_ENI: !Ref TargetENI
           TARGET_LB: !Ref TargetLB
       Code:
-        S3Bucket: aktotestbucket
-        S3Key: CreateMirroringSession.zip
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/CreateMirroringSession.zip'
       Description: Auto create mirroring configuration
       TracingConfig:
         Mode: Active

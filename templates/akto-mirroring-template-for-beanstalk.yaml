@@ -117,7 +117,7 @@ Resources:
       Role: !GetAtt 
         - LambdaBasicExecutionRole
         - Arn
-      Handler: CreateMirroringSession/index.ElasticBeanstalkHandler
+      Handler: index.ElasticBeanstalkHandler
       Environment:
         Variables:
           EB_ENV_NAMES:  !Join 
@@ -132,8 +132,8 @@ Resources:
           TARGET_LB: !Ref TargetLB
       
       Code:
-        S3Bucket: aktotestbucket
-        S3Key: CreateMirroringSession.zip
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/CreateMirroringSession.zip'
       Description: Auto create mirroring configuration for Elastic Beanstalk Environments
       TracingConfig:
         Mode: Active
