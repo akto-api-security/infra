@@ -6,15 +6,16 @@
             "Description": "The VPC where Akto will run",
             "Type": "AWS::EC2::VPC::Id"
         },
+        "VpcCIDR": {
+            "Description": "Please enter the IP range (CIDR notation) for this VPC",
+            "Type": "String",
+            "Default": "0.0.0.0/0"
+        },    
         "SubnetId": {
             "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
             "Type": "AWS::EC2::Subnet::Id",
             "ConstraintDescription": "must be an existing subnet"
         },        
-        "LicenseKey": {
-            "Description": "License Key for your akto deployment. Get yours at my.akto.io",
-            "Type": "String"
-        },
         "AktoInstanceType": {
             "Description": "Instance type to be allocated to Akto",
             "ConstraintDescription": "Must be a valid EC2 instance type",
@@ -64,7 +65,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "GroupDescription": "Enable the ports Akto requires (80, 443, 22, 8080, 8190, 4789, 9092)",
+                "GroupDescription": "Enable the ports Akto requires (8080, 4789, 9092)",
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
@@ -74,30 +75,23 @@
                     },
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 8190,
-                        "ToPort": 8190,
-                        "CidrIp": "0.0.0.0/0"
-                    },
-                    {
-                        "IpProtocol": "tcp",
                         "FromPort": 9092,
                         "ToPort": 9092,
-                        "CidrIp": "0.0.0.0/0"
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
                     },
                     {
                         "IpProtocol": "udp",
                         "FromPort": 4789,
                         "ToPort": 4789,
-                        "CidrIp": "0.0.0.0/0"
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
                     }
                 ],
                 "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 0,
-                        "ToPort": 65535,
-                        "CidrIp": "0.0.0.0/0"
-                    }
+                    
                 ]
             },
             "Metadata": {
@@ -158,9 +152,8 @@
                     "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/self_hosting/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
-                    { "Fn::Sub": [
-                        "./cf-deploy-akto < <(echo '${LicKey}')",
-                        { "LicKey": {"Ref" : "LicenseKey" }}]},
+                    "./cf-deploy-akto < <(echo 'test')",
+                    
                     {"Fn::Join": ["", 
                     ["sudo /opt/aws/bin/cfn-signal -s true",
                     "         --stack ", { "Ref" : "AWS::StackName" },

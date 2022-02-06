@@ -271,13 +271,11 @@ Resources:
                   - 'ec2:DeleteNetworkInterface'
                   - 'ec2:AttachNetworkInterface'
                 Resource: '*'
-  
   InvokeSaveCollection:
     Type: AWS::CloudFormation::CustomResource
     DependsOn:  SaveCollectionNames
     Properties:
       ServiceToken: !GetAtt SaveCollectionNames.Arn
-
   LambdaSecurityGroupVPC:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -291,7 +289,6 @@ Resources:
           FromPort: 9092
           ToPort: 9092
           CidrIp: "0.0.0.0/0"
-      
   SaveCollectionNames:
     Type: 'AWS::Lambda::Function'
     Condition: CreateMirroringSession
