@@ -100,14 +100,6 @@
                 }
             }
         },
-        "AktoNetworkInterface":
-        {
-            "Type" : "AWS::EC2::NetworkInterface",
-            "Properties" : {
-                "SubnetId": {"Ref": "SubnetId"},
-                "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
-            }
-        },
         "AktoInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
@@ -134,9 +126,11 @@
                     }
                 ],
                 "NetworkInterfaces": [
-                    { 
-                        "NetworkInterfaceId"  :{ "Ref" : "AktoNetworkInterface" },
-                        "DeviceIndex" : "0"
+                    {
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
                     }
                 ],        
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
@@ -167,95 +161,6 @@
                     "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
                 }
             }
-        },
-        "AktoNLB" : {
-            "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties"  :{
-              "Type"  :"network",
-              "Subnets" : [{"Ref" : "SubnetId"}],
-              "Name" : "AktoNLB"
-            }
-        },
-        "AktoTrafficMirroringTargetGroup"  :{
-            "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties" : {
-                "Port" : "4789",
-                "Protocol" : "UDP",
-                "TargetType" : "instance",
-                "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
-                "Name" : "AktoTrafficMirroringTargetGroup"
-            }
-        },
-        "AktoTrafficMirroringListener" : {
-            "Type" : "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties" : {
-                "LoadBalancerArn" : {"Ref" : "AktoNLB"},
-                "Port" : "4789",
-                "Protocol" : "UDP",
-                "DefaultActions" : [
-                    {
-                        "Type" : "forward",
-                        "TargetGroupArn" : {"Ref" : "AktoTrafficMirroringTargetGroup"}
-                    }
-                ]   
-            }
-        },
-        "AktoDashboardTargetGroup"  :{
-            "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties" : {
-                "Port" : "80",
-                "Protocol" : "TCP",
-                "TargetType" : "instance",
-                "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
-                "Name" : "AktoDashboardTargetGroup"
-            }
-        },
-        "AktoDashboardListener" : {
-            "Type" : "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties" : {
-                "LoadBalancerArn" : {"Ref" : "AktoNLB"},
-                "Port" : "80",
-                "Protocol" : "TCP",
-                "DefaultActions" : [
-                    {
-                        "Type" : "forward",
-                        "TargetGroupArn" : {"Ref" : "AktoDashboardTargetGroup"}
-                    }
-                ]   
-            }
-        },
-        "AktoKafkaTargetGroup"  :{
-            "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties" : {
-                "Port" : "9092",
-                "Protocol" : "TCP",
-                "TargetType" : "instance",
-                "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
-                "Name" : "AktoKafkaTargetGroup"
-            }
-        },
-        "AktoKafkaListener" : {
-            "Type" : "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties" : {
-                "LoadBalancerArn" : {"Ref" : "AktoNLB"},
-                "Port" : "9092",
-                "Protocol" : "TCP",
-                "DefaultActions" : [
-                    {
-                        "Type" : "forward",
-                        "TargetGroupArn" : {"Ref" : "AktoKafkaTargetGroup"}
-                    }
-                ]   
-            }
         }
     },
     "Outputs": {
@@ -276,14 +181,7 @@
             ]
           },
           "Description": "Newly created application URL"
-        },
-        "AktoNLB" : {
-            "Value"  : {"Ref" : "AktoNLB"},
-            "Description" : "Arn of Akto Network Load Balancer"
-        },
-        "AktoNetworkInterface" :{
-            "Value" : {"Ref" : "AktoNetworkInterface"},
-            "Description" : "Eni ID of Single Akto Instance"
         }
     }    
 }
+
