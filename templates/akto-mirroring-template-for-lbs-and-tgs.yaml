@@ -1,178 +1,148 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: AWS CloudFormation Template to configure traffic mirroring sessions on an Elastic Beanstalk Environment
+Description: AWS cloudFormation template to configure traffic mirroring sessions
 Parameters:
-  EBEnvironmentNames:
-    Description: 'List of Elastic Beanstalk environment Names to configure traffic mirroring session to'
+  SourceLBs:
+    Description: 'Comma separated list of loadblancer names ( eg: lb1, lb2, lb3 )'
     Type: CommaDelimitedList
-  InstancesPerEBEnvironment:
-    Description: 'Number of instances to be mirrored per Beanstalk environment'
-    Type: Number
-    Default: 1
-
-  MirroringSessionNumber:
-    Description: 'Unique mirroring session number to be used for mirroring session'
-    Type: String
-    Default: '10'
-  
-  TargetENI:
-    Description: 'ENI Id of target network interface'
-    Type: String
+    Default: ''
+  SourceTargetGroups:
+    Description: 'Comma separated list of Target Group names ( eg: tg1, tg2, tg3 )'
+    Type: CommaDelimitedList
     Default: ''
 
+  InstancesPerSource:
+    Description: Number of instances to be mirrored per resource group (Load Balancer/Target Group). (To mirror traffic from all instances, enter any number less than 1. AWS currently limits traffic mirroring to 10 instances. If you want more source instances, please email to support@akto.io.
+    Type: Number
+    Default: 1  
+  TargetENI:
+    Description: ENI id of target interface
+    Type: String
+    Default: ''
   TargetLB:
     Description: Target Loadbalancer ARN
     Type: String
     Default: ''
-
+  MirroringSessionNumber:
+    Description: Unique mirroring session number to be used for mirroring session
+    Type: String
+    Default: '10'
 Conditions:
-  CreateMirroringSession: !Not 
-    - !Equals 
-      - !Select 
+  CreateMirroringSessionForLBs: !Not
+    - !Equals
+      - !Select
         - 0
-        - !Ref EBEnvironmentNames
+        - !Ref SourceLBs
+      - ''
+  CreateMirroringSessionForTGs: !Not
+    - !Equals
+      - !Select
+        - 0
+        - !Ref SourceTargetGroups
       - ''
 
-  CreatePeriodicMirroringSession: !Not 
-    - !Equals 
-      - !Select 
-        - 0
-        - !Ref EBEnvironmentNames
-      - ''
+  CreateMirroringSession: !Or
+    - !Condition CreateMirroringSessionForLBs
+    - !Condition CreateMirroringSessionForTGs
+  CreatePeriodicMirroringSession: !Or
+    - !Condition CreateMirroringSessionForLBs
+    - !Condition CreateMirroringSessionForTGs
   isTargetNLB: !Not
     - !Equals
       - !Ref TargetLB
       - ''
-
 Resources:
-
   TrafficMirrorTarget:
-    Type: AWS::EC2::TrafficMirrorTarget
+    Type: 'AWS::EC2::TrafficMirrorTarget'
     Properties:
       Description: Traffic Mirror target set to network interface of Akto EC2 instance
       Tags:
         - Key: Name
-          Value: !Join 
+          Value: !Join
             - ''
             - - !Ref 'AWS::StackName'
               - '-'
               - Target
         - Key: Deployment
           Value: Akto-CloudFormation
-      NetworkInterfaceId: !If 
+      NetworkInterfaceId: !If
         - isTargetNLB
         - !Ref AWS::NoValue
         - !Ref TargetENI
-      NetworkLoadBalancerArn: !If 
+      NetworkLoadBalancerArn: !If
         - isTargetNLB
         - !Ref TargetLB
         - !Ref AWS::NoValue
-
-  EBTrafficMirrorFilter:
-    Type: AWS::EC2::TrafficMirrorFilter
+  LBTrafficMirrorFilter:
+    Type: 'AWS::EC2::TrafficMirrorFilter'
     Properties:
-      Description: Traffic mirror filter for Target Groups
+      Description: Traffic mirror filter for LBs and Target Groups
       NetworkServices:
         - amazon-dns
       Tags:
         - Key: Name
-          Value: !Join 
+          Value: !Join
             - ''
             - - !Ref 'AWS::StackName'
               - '-'
-              - 'Filter'
+              - Filter
         - Key: Deployment
           Value: Akto-CloudFormation
-  EBTrafficMirrorFilterRule:
-    Type: AWS::EC2::TrafficMirrorFilterRule
-    Properties:
-      DestinationCidrBlock: "0.0.0.0/0"
-      SourceCidrBlock: "0.0.0.0/0"
-      TrafficMirrorFilterId: !Ref EBTrafficMirrorFilter
-      RuleNumber: 100
-      RuleAction: "accept"
-      Protocol: 6
-      TrafficDirection: "ingress"
-
-  CustomSourceENIs:
-    Type: AWS::CloudFormation::CustomResource
+ 
+  
+  LambdaLogGroup:
+    Type: 'AWS::Logs::LogGroup'
     Condition: CreateMirroringSession
     Properties:
-      ServiceToken: !GetAtt 
-        - CreateMirrorSession
-        - Arn
-      EBEnvironmentNames: !Ref EBEnvironmentNames
-      MirrorTarget: !Ref TrafficMirrorTarget
-      MirrorFilter: !Ref EBTrafficMirrorFilter
-      SampleSize: !Ref InstancesPerEBEnvironment
-      TargetENI: !Ref TargetENI 
-      TargetLB: !Ref TargetLB     
-    DependsOn: LambdaLogGroup
-  
-  CreateMirrorSession:
-    Type: AWS::Lambda::Function
+      LogGroupName: !Sub '/aws/lambda/${CreateMirrorSession}'
+      RetentionInDays: 7
+  LambdaBasicExecutionRole:
+    Type: 'AWS::IAM::Role'
     Condition: CreateMirroringSession
     Properties:
-      Runtime: nodejs12.x
-      Timeout: 60
-      Role: !GetAtt 
-        - LambdaBasicExecutionRole
-        - Arn
-      Handler: CreateMirroringSession/index.ElasticBeanstalkHandler
-      Environment:
-        Variables:
-          EB_ENV_NAMES:  !Join 
-            - ','
-            - !Ref EBEnvironmentNames
-          SAMPLE_SIZE: !Ref InstancesPerEBEnvironment
-          
-          TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
-          TRAFFIC_MIRROR_FILTER_ID: !Ref EBTrafficMirrorFilter
-          TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
-          TARGET_ENI: !Ref TargetENI
-          TARGET_LB: !Ref TargetLB
-      
-      Code:
-        S3Bucket: aktotestbucket
-        S3Key: CreateMirroringSession.zip
-      Description: Auto create mirroring configuration for Elastic Beanstalk Environments
-      TracingConfig:
-        Mode: Active
-    
-  PeriodicEventRule:
-    Type: AWS::Events::Rule
-    Condition: CreatePeriodicMirroringSession
-    Properties:
-      Description: Generate an event periodically
-      Name: !Join 
-        - ''
-        - - !Ref 'AWS::StackName'
-          - '-'
-          - PeriodicRule
-      ScheduleExpression: rate(15 minutes)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt 
-            - CreateMirrorSession
-            - Arn
-          Id: !Ref CreateMirrorSession
-  
-  PeriodicEventPermission:
-
-    Type: AWS::Lambda::Permission
-    Condition: CreatePeriodicMirroringSession
-    Properties:
-      FunctionName: !GetAtt 
-        - CreateMirrorSession
-        - Arn
-      Action: 'lambda:InvokeFunction'
-      Principal: events.amazonaws.com
-      SourceAccount: !Ref 'AWS::AccountId'
-      SourceArn: !GetAtt 
-        - PeriodicEventRule
-        - Arn
-   
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: LBCreateTrafficMirrorSession
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DescribeTrafficMirrorSessions'
+                  - 'ec2:DescribeInstances'
+                  - 'elasticloadbalancing:DescribeLoadBalancers'
+                  - 'elasticloadbalancing:DescribeTargetGroups'
+                  - 'elasticloadbalancing:DescribeTargetHealth'
+                  - 'ec2:DescribeTrafficMirrorFilters'
+                  - 'ec2:DeleteTrafficMirrorFilterRule'
+                  - 'ec2:CreateTrafficMirrorFilterRule'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateTrafficMirrorSession'
+                Resource:
+                  - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
+                  - 'arn:aws:ec2:*:*:network-interface/*'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:ec2:*:*:traffic-mirror-target/'
+                      - !Ref TrafficMirrorTarget
+                  - !Join
+                    - ''
+                    - - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DeleteTrafficMirrorSession'
+                Resource:
+                  - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
   LambdaLogPermissions:
-    Type: AWS::IAM::Policy
+    Type: 'AWS::IAM::Policy'
     Condition: CreateMirroringSession
     Properties:
       Roles:
@@ -192,60 +162,82 @@ Resources:
                 arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}:*
               - !Sub >-
                 arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}:*:*
-
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Condition: CreateMirroringSession 
-    Properties: 
-      LogGroupName: !Sub '/aws/lambda/${CreateMirrorSession}'
-      RetentionInDays: 7
-
-  LambdaBasicExecutionRole:
-    Type: AWS::IAM::Role
+  CustomSourceENIs:
+    Type: 'AWS::CloudFormation::CustomResource'
     Condition: CreateMirroringSession
-    Properties: 
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: EBTrafficMirrorSession
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:DescribeNetworkInterfaces'
-                  - 'ec2:DescribeTrafficMirrorSessions'
-                  - 'ec2:Describeinstances'
-                  - 'ec2:DescribeTrafficMirrorFilters'
-                  - 'ec2:DeleteTrafficMirrorFilterRule'
-                  - 'ec2:CreateTrafficMirrorFilterRule'
-                  - 'elbv2:DescribeLoadBalancers'
-                  - 'elasticbeanstalk:DescribeEnvironmentResources'
-                  - 'autoscaling:DescribeAutoScalingGroups'
-                Resource: '*'
+    Properties:
+      ServiceToken: !GetAtt
+        - CreateMirrorSession
+        - Arn
+      SourceLBs: !Ref SourceLBs
+      SourceTGs: !Ref SourceTargetGroups
+      MirrorTarget: !Ref TrafficMirrorTarget
+      MirrorFilter: !Ref LBTrafficMirrorFilter
+      SampleSize: !Ref InstancesPerSource
+      TargetENI: !Ref TargetENI
+    DependsOn: LambdaLogGroup
+  CreateMirrorSession:
+    Type: 'AWS::Lambda::Function'
+    Condition: CreateMirroringSession
+    Properties:
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt
+        - LambdaBasicExecutionRole
+        - Arn
+      Handler: CreateMirroringSession/index.LoadBalancerAndTargetGroupHandler
+      Environment:
+        Variables:
+          ELB_NAMES: !Join
+            - ','
+            - !Ref SourceLBs
+          TARGET_GROUP_NAMES: !Join
+            - ','
+            - !Ref SourceTargetGroups
+          TRAFFIC_MIRROR_FILTER_ID: !Ref LBTrafficMirrorFilter
+          TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
+          TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
+          SAMPLE_SIZE: !Ref InstancesPerSource
+          TARGET_ENI: !Ref TargetENI
+          TARGET_LB: !Ref TargetLB
+      Code:
+        S3Bucket: aktotestbucket
+        S3Key: CreateMirroringSession.zip
+      Description: Auto create mirroring configuration
+      TracingConfig:
+        Mode: Active
+  PeriodicEventRule:
+    Type: 'AWS::Events::Rule'
+    Condition: CreatePeriodicMirroringSession
+    Properties:
+      Description: Generate an event periodically
+      Name: !Join
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-'
+          - PeriodicRule
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt
+            - CreateMirrorSession
+            - Arn
+          Id: !Ref CreateMirrorSession
+ 
+  PeriodicEventPermission:
+    Type: 'AWS::Lambda::Permission'
+    Condition: CreatePeriodicMirroringSession
+    Properties:
+      FunctionName: !GetAtt
+        - CreateMirrorSession
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt
+        - PeriodicEventRule
+        - Arn
 
-              - Effect: Allow
-                Action:
-                  - 'ec2:CreateTrafficMirrorSession'
-                Resource:
-                  - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
-                  - 'arn:aws:ec2:*:*:network-interface/*'
-                  - !Join 
-                    - ''
-                    - - 'arn:aws:ec2:*:*:traffic-mirror-target/'
-                      - !Ref TrafficMirrorTarget
-                  - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
-
-              - Effect: Allow
-                Action: 
-                  - 'ec2:DeleteTrafficMirrorSession'
-                Resource:
-                  - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
 
   LambdaVPCAccessRole:
     Type: 'AWS::IAM::Role'
@@ -271,11 +263,7 @@ Resources:
                   - 'ec2:DeleteNetworkInterface'
                   - 'ec2:AttachNetworkInterface'
                 Resource: '*'
-  InvokeSaveCollection:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn:  SaveCollectionNames
-    Properties:
-      ServiceToken: !GetAtt SaveCollectionNames.Arn
+  
   LambdaSecurityGroupVPC:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -289,6 +277,12 @@ Resources:
           FromPort: 9092
           ToPort: 9092
           CidrIp: "0.0.0.0/0"
+  InvokeSaveCollection:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:  SaveCollectionNames
+    Properties:
+      ServiceToken: !GetAtt SaveCollectionNames.Arn   
+       
   SaveCollectionNames:
     Type: 'AWS::Lambda::Function'
     Condition: CreateMirroringSession
@@ -321,12 +315,14 @@ Resources:
       Description: Send collection name to id mapping to Akto modules
       TracingConfig:
         Mode: Active
+
   LambdaLogGroupVPC:
     Type: 'AWS::Logs::LogGroup'
     Condition: CreateMirroringSession
     Properties:
       LogGroupName: !Sub '/aws/lambda/${SaveCollectionNames}'
       RetentionInDays: 7
+
   LambdaLogPermissionsVPC:
     Type: 'AWS::IAM::Policy'
     Condition: CreateMirroringSession
@@ -348,6 +344,7 @@ Resources:
                 arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${SaveCollectionNames}:*
               - !Sub >-
                 arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${SaveCollectionNames}:*:*
+
   PeriodicEventRuleVPC:
     Type: 'AWS::Events::Rule'
     Condition: CreateMirroringSession
@@ -379,25 +376,18 @@ Resources:
       SourceArn: !GetAtt
         - PeriodicEventRuleVPC
         - Arn
+
 Outputs:
   successEniList:
-    Description: Successful ENI list
+    Description: Successfull ENI list
     Condition: CreateMirroringSession
-    Value: !GetAtt 
+    Value: !GetAtt
       - CustomSourceENIs
       - successEnis
   failedEniList:
-    Description: Failed ENI List
+    Description: Failed ENI list
     Condition: CreateMirroringSession
-    Value: !GetAtt 
+    Value: !GetAtt
       - CustomSourceENIs
       - failedEnis
-  
-
-
-
-
-
-      
-
 
