@@ -171,6 +171,8 @@
             "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties"  :{
               "Type"  :"network",
+              "Scheme": "internal",
+              "IpAddressType": "ipv4",
               "Subnets" : [{"Ref" : "SubnetId"}],
               "Name" : "AktoNLB"
             }
@@ -180,6 +182,14 @@
             "Properties" : {
                 "Port" : "4789",
                 "Protocol" : "UDP",
+                "HealthCheckEnabled" : "true",
+                "HealthCheckIntervalSeconds" : 10,
+                "HealthCheckPath" : "/metrics",
+                "HealthCheckPort" : "8080",
+                "HealthCheckProtocol" : "HTTP",
+                "HealthCheckTimeoutSeconds" : 6,
+                "HealthyThresholdCount" : 2,
+                "UnhealthyThresholdCount" : 2,
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
                 "Targets" : [{
@@ -207,6 +217,15 @@
             "Properties" : {
                 "Port" : "8080",
                 "Protocol" : "TCP",
+                "HealthCheckEnabled" : "true",
+                "HealthCheckIntervalSeconds" : 10,
+                "HealthCheckPath" : "/metrics",
+                "HealthCheckPort" : "8080",
+                "HealthCheckProtocol" : "HTTP",
+                "HealthCheckTimeoutSeconds" : 6,
+                "HealthyThresholdCount" : 2,
+                "UnhealthyThresholdCount" : 2,
+        
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
                 "Targets" : [{
@@ -235,6 +254,14 @@
                 "Port" : "9092",
                 "Protocol" : "TCP",
                 "TargetType" : "instance",
+                "HealthCheckEnabled" : "true",
+                "HealthCheckIntervalSeconds" : 10,
+                "HealthCheckPath" : "/metrics",
+                "HealthCheckPort" : "8080",
+                "HealthCheckProtocol" : "HTTP",
+                "HealthCheckTimeoutSeconds" : 6,
+                "HealthyThresholdCount" : 2,
+                "UnhealthyThresholdCount" : 2,
                 "VpcId" : {"Ref":"VPC"},
                 "Targets" : [{
                     "Id" : { "Ref":"AktoInstance"}
