@@ -257,6 +257,7 @@ Resources:
           TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
           SAMPLE_SIZE: !Ref InstancesPerSource
           TARGET_ENI: !Ref TargetENI
+          TARGET_LB: !Ref TargetLB
       Code:
         ZipFile: >
           var aws = require('aws-sdk')
@@ -283,6 +284,7 @@ Resources:
 
           var sampleSize = process.env.SAMPLE_SIZE;
           var targetENI = process.env.TARGET_ENI;
+          var targetLB = process.env.TARGET_LB;
           function filterDuplicates(value, index, self) {
               return self.indexOf(value) === index;
           }
@@ -335,6 +337,63 @@ Resources:
             return instances.Reservations[0].Instances[0];
           }
 
+
+          async function getAktoLBDetails() {
+            var elb = new aws.ELBv2();
+              var params = {
+                  "LoadBalancerArns" : [targetLB]
+              };
+
+
+              console.log("Getting Akto LB Details : ", JSON.stringify(params));
+
+              var LBDesc = await elb.describeLoadBalancers(params).promise().catch(err=>{
+                console.log("Error describing Akto LB",err);
+              });
+              
+              if(!LBDesc.LoadBalancers[0])
+              {
+                console.log("Could not find Akto Load Balancer");
+                return ;
+              }
+              
+              LBDesc = LBDesc.LoadBalancers[0];
+
+              var LBName = targetLB.substring(targetLB.indexOf('/')+1);
+              // LBname to get private ip of ENI of LB 
+
+            var eniDesc = 'ELB '+LBName;
+              var ec2 = new aws.EC2();
+              params = {
+                Filters: [{
+                  'Name' : 'description',
+                  'Values' : [eniDesc]
+                }]
+              };
+              
+              var ENIDesc = await ec2.describeNetworkInterfaces(params).promise().catch(err=>{
+                    console.log("Error getting ENI Details of ENI with Description ",eniDesc, " error : ",err); 
+              });
+              
+              if(!ENIDesc.NetworkInterfaces[0])
+              {
+                console.log("Coud not find Network Interface Details");
+                return ;
+                
+              }
+              
+              console.log("ENIDesc: ",ENIDesc);
+              
+              LBDesc.PrivateIpAddress  = ENIDesc.NetworkInterfaces[0].PrivateIpAddress;
+              LBDesc.Subnets = LBDesc.AvailabilityZones.map(x=>x.SubnetId);
+              
+              
+              
+              console.log("LoadBalancerDescription : ",JSON.stringify(LBDesc));
+              return LBDesc;
+              
+          } 
+          
           async function getEnisAndPortOfTargetGroup(params, allPorts, eniList)
           {
               var isError = false;
@@ -897,11 +956,24 @@ Resources:
                   responseData['successEnis'] = JSON.stringify(successEnis);
                   responseData['failedEnis'] = JSON.stringify(failedEnis);
 
-                  var aktoDetails = await getAktoInstanceDetails();
-                  responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                  responseData['SubnetId'] = [aktoDetails.SubnetId];
-                  responseData['SecurityGroups'] = aktoDetails.SecurityGroups.map(x => x.GroupId);
-                  responseData['VpcId'] = aktoDetails.VpcId;
+
+                  if(targetENI.length !=0 )
+                  {
+                  // when targetEni is given
+                      var aktoDetails = await getAktoInstanceDetails();
+                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                      responseData['SubnetId'] = [aktoDetails.SubnetId];
+                      responseData['VpcId'] = aktoDetails.VpcId;
+
+                  }
+                  else 
+                  {
+                  // when targetLB is given
+                      var aktoDetails = await getAktoLBDetails();
+                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                      responseData['SubnetId'] = aktoDetails.Subnets;
+                      responseData['VpcId'] = aktoDetails.VpcId;
+                  }
 
                   await response.send(event, context, "SUCCESS", responseData);
               }
