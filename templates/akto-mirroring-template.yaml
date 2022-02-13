@@ -257,6 +257,7 @@ Resources:
           TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
           SAMPLE_SIZE: !Ref InstancesPerSource
           TARGET_ENI: !Ref TargetENI
+          TARGET_LB: !Ref TargetLB
       Code:
         ZipFile: >
           var aws = require('aws-sdk')
@@ -283,6 +284,7 @@ Resources:
 
           var sampleSize = process.env.SAMPLE_SIZE;
           var targetENI = process.env.TARGET_ENI;
+          var targetLB = process.env.TARGET_LB;
           function filterDuplicates(value, index, self) {
               return self.indexOf(value) === index;
           }
