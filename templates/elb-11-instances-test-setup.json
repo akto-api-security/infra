@@ -1,0 +1,423 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Sample Template ELBStickinessSample: Create a load balanced sample web site with ELB stickiness enabled. The AI is chosen based on the region in which the stack is run. This example creates 2 EC2 instances behind a load balancer with a simple health check. The ec2 instnces are untargeted and may be deployed in one or more availaiblity zones. The web site is available on port 80, however, the instances can be configured to listen on any port (8888 by default). **WARNING** This template creates one or more Amazon EC2 instances and an Application Load Balancer. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+     "VpcId" : {
+      "Type" : "AWS::EC2::VPC::Id",
+      "Description" : "VpcId of your existing Virtual Private Cloud (VPC)",
+      "ConstraintDescription" : "must be the VPC Id of an existing Virtual Private Cloud."
+    },
+
+    "Subnets" : {
+      "Type" : "List<AWS::EC2::Subnet::Id>",
+      "Description" : "The list of SubnetIds in your Virtual Private Cloud (VPC)",
+      "ConstraintDescription" : "must be a list of at least two existing subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+    },
+
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+    }
+
+  },
+
+  "Resources" : {
+    "ApplicationLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties" : {
+        "Subnets" : { "Ref" : "Subnets"},
+        "SecurityGroups" : [ 
+          { "Fn::GetAtt" : [ "LBSecurityGroup", "GroupId" ] }
+        ]
+      }
+    },
+
+    "ALBListener" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties" : {
+        "DefaultActions" : [{
+          "Type" : "forward",
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroup" }
+        }],
+        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
+        "Port" : 443,
+        "Protocol" : "HTTPS",
+        "Certificates": [{
+          "CertificateArn": "arn:aws:acm:us-east-1:233905125530:certificate/c3e59053-07ce-4bea-a32f-7013e216fb6d"
+        }],
+        "SslPolicy": "ELBSecurityPolicy-TLS-1-2-Ext-2018-06"
+      }
+    },
+
+    "ALBTargetGroup" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties" : {
+        "HealthCheckIntervalSeconds" : 5,
+        "HealthCheckTimeoutSeconds" : 2,
+        "HealthyThresholdCount" : 2,
+        "HealthCheckPath": "/api/books",
+        "Port" : 8000,
+        "Protocol" : "HTTP",
+        "Matcher": {
+          "HttpCode": "200-299"
+        },
+        "UnhealthyThresholdCount" : 2,
+        "VpcId" : {"Ref" : "VpcId"},
+        "Targets" : [ 
+            { "Id" : { "Ref" : "EC2Instance1"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance2"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance3"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance4"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance5"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance6"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance7"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance8"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance9"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance10"}, "Port" : 8000 },
+            { "Id" : { "Ref" : "EC2Instance11"}, "Port" : 8000 }
+        ]
+      }
+    },
+
+    "EC2Instance1" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance1 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance2" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance2 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance3" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance3 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance4" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance4 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance5" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance5 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance6" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance6 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance7" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance7 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance8" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance8 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance9" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance9 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "EC2Instance10" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance10 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+    "EC2Instance11" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : "t3.nano",
+        "ImageId" : {"Ref": "LatestAmiId" },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "yum install -y git\n",
+             "git clone https://github.com/avneesh99/gorestapi.git\n",
+             "cd gorestapi\n",
+             "nohup ./restapi &\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource EC2Instance11 ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M"
+        }
+      }
+    },
+
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP access on the inbound port",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : "22",
+          "ToPort" : "22",
+          "CidrIp" : "0.0.0.0/0"
+        },
+        {
+          "IpProtocol" : "tcp",
+          "FromPort" : "8000",
+          "ToPort" : "8000",
+          "CidrIp" : "0.0.0.0/0"
+        } ]
+      }
+    },
+    "LBSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTPs access on the inbound port",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : "443",
+          "ToPort" : "443",
+          "CidrIp" : "0.0.0.0/0"
+        }
+       ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "URL" : {
+      "Description" : "URL of the sample website",
+      "Value" :  { "Fn::Join" : [ "", [ "https://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}, "/api/books" ] ]}
+    },
+    "LBName": {
+      "Description": "Name of the Load Balancer",
+      "Value": { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "LoadBalancerName" ]}
+    }
+  }
+}
