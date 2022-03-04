@@ -56,10 +56,14 @@ Resources:
               - Target
         - Key: Deployment
           Value: Akto-CloudFormation
-      NetworkInterfaceId: !If 
+      NetworkInterfaceId: !If
         - isTargetNLB
         - !Ref AWS::NoValue
         - !Ref TargetENI
+      NetworkLoadBalancerArn: !If
+        - isTargetNLB
+        - !Ref TargetLB
+        - !Ref AWS::NoValue
   EBTrafficMirrorFilter:
     Type: AWS::EC2::TrafficMirrorFilter
     Properties:
@@ -75,7 +79,7 @@ Resources:
               - 'Filter'
         - Key: Deployment
           Value: Akto-CloudFormation
-  EBTrafficMirrorFilterRule:
+  EBTrafficMirrorFilterRuleIngress:
     Type: AWS::EC2::TrafficMirrorFilterRule
     Properties:
       DestinationCidrBlock: "0.0.0.0/0"
@@ -85,6 +89,16 @@ Resources:
       RuleAction: "accept"
       Protocol: 6
       TrafficDirection: "ingress"
+  EBTrafficMirrorFilterRuleEgress:
+    Type: AWS::EC2::TrafficMirrorFilterRule
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      SourceCidrBlock: "0.0.0.0/0"
+      TrafficMirrorFilterId: !Ref EBTrafficMirrorFilter
+      RuleNumber: 100
+      RuleAction: "accept"
+      Protocol: 6
+      TrafficDirection: "egress"
 
   CustomSourceENIs:
     Type: AWS::CloudFormation::CustomResource
@@ -121,7 +135,7 @@ Resources:
           TRAFFIC_MIRROR_FILTER_ID: !Ref EBTrafficMirrorFilter
           TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
           TARGET_ENI: !Ref TargetENI
-      
+          TARGET_LB: !Ref TargetLB
       Code:
         ZipFile: >
             var aws = require('aws-sdk')
@@ -134,6 +148,7 @@ Resources:
             var mirrorSessionNumber = process.env.TRAFFIC_MIRROR_SESSION_NUMBER;
             var sampleSize = process.env.SAMPLE_SIZE;
             var targetENI = process.env.TARGET_ENI;
+            var targetLB = process.env.TARGET_LB;
 
             var EBEnvironmentNamesArray = process.env.EB_ENV_NAMES.split(",").map(item=>item.trim());
 
@@ -151,6 +166,63 @@ Resources:
               }
               return hash & ((2<<20)-1);
             }
+
+
+            async function getAktoLBDetails() {
+                var elb = new aws.ELBv2();
+                var params = {
+                    "LoadBalancerArns" : [targetLB]
+                };
+
+                console.log("Getting Akto LB Details : ", JSON.stringify(params));
+
+                var LBDesc = await elb.describeLoadBalancers(params).promise().catch(err=>{
+                  console.log("Error describing Akto LB",err);
+                });
+                
+                if(!LBDesc.LoadBalancers[0])
+                {
+                  console.log("Could not find Akto Load Balancer");
+                  return ;
+                }
+                
+                LBDesc = LBDesc.LoadBalancers[0];
+
+                var LBName = targetLB.substring(targetLB.indexOf('/')+1);
+                // LBname to get private ip of ENI of LB 
+
+              var eniDesc = 'ELB '+LBName;
+                var ec2 = new aws.EC2();
+                params = {
+                  Filters: [{
+                    'Name' : 'description',
+                    'Values' : [eniDesc]
+                  }]
+                };
+                
+                var ENIDesc = await ec2.describeNetworkInterfaces(params).promise().catch(err=>{
+                      console.log("Error getting ENI Details of ENI with Description ",eniDesc, " error : ",err); 
+                });
+                
+                if(!ENIDesc.NetworkInterfaces[0])
+                {
+                  console.log("Coud not find Network Interface Details");
+                  return ;
+                  
+                }
+                
+                console.log("ENIDesc: ",ENIDesc);
+                
+                LBDesc.PrivateIpAddress  = ENIDesc.NetworkInterfaces[0].PrivateIpAddress;
+                LBDesc.Subnets = LBDesc.AvailabilityZones.map(x=>x.SubnetId);
+                
+                
+                
+                console.log("LoadBalancerDescription : ",JSON.stringify(LBDesc));
+                return LBDesc;
+                
+            } 
+
             async function getAktoInstanceDetails() {
               var ec2 = new aws.EC2();
               var params = {
@@ -449,13 +521,23 @@ Resources:
                     responseData['successEnis'] = JSON.stringify(successEnis);
                     responseData['failedEnis'] = JSON.stringify(failedEnis);
 
+                    if(targetENI.length !=0 )
+                    {
+                    // when targetEni is given
+                        var aktoDetails = await getAktoInstanceDetails();
+                        responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                        responseData['SubnetId'] = [aktoDetails.SubnetId];
+                        responseData['VpcId'] = aktoDetails.VpcId;
 
-                    var aktoDetails = await getAktoInstanceDetails();
-                    responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                    responseData['SubnetId'] = [aktoDetails.SubnetId];
-                    responseData['SecurityGroups'] = aktoDetails.SecurityGroups.map(x => x.GroupId);
-                    responseData['VpcId'] = aktoDetails.VpcId;
-
+                    }
+                    else 
+                    {
+                    // when targetLB is given
+                        var aktoDetails = await getAktoLBDetails();
+                        responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                        responseData['SubnetId'] = aktoDetails.Subnets;
+                        responseData['VpcId'] = aktoDetails.VpcId;
+                    }
 
                     console.log("Result : "+JSON.stringify(responseData));
                     await response.send(event, context, "SUCCESS", responseData);
@@ -577,6 +659,7 @@ Resources:
                   - 'ec2:DescribeTrafficMirrorFilters'
                   - 'ec2:DeleteTrafficMirrorFilterRule'
                   - 'ec2:CreateTrafficMirrorFilterRule'
+                  - 'elasticloadbalancing:DescribeLoadBalancers'
                   - 'elasticbeanstalk:DescribeEnvironmentResources'
                   - 'autoscaling:DescribeAutoScalingGroups'
                 Resource: '*'
@@ -739,11 +822,3 @@ Outputs:
     Value: !GetAtt 
       - CustomSourceENIs
       - failedEnis
-
-
-
-
-
-      
-
-
