@@ -161,6 +161,7 @@ Resources:
                   - 'ec2:DescribeNetworkInterfaces'
                   - 'ec2:DescribeTrafficMirrorSessions'
                   - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeVpcs'
                   - 'ecs:DescribeClusters'
                   - 'ecs:DescribeTasks'
                   - 'ecs:ListTasks'
@@ -870,6 +871,18 @@ Resources:
                   failedEnis.push({ eni: eni, message: err.message });
               });
               if (promise != undefined) {
+                  // get vpc cidr
+                  var vpcPromise = await ec2.describeVpcs().promise().catch((err1) => {
+                    console.error(err1)
+                  })
+                  let cidrBlock = []
+                  if (vpcPromise !== undefined && vpcPromise["Vpcs"]) {
+                    vpcPromise["Vpcs"].forEach((x) => {
+                      cidrBlock.push(x["CidrBlock"])
+                    })
+                    console.log("cidrBlock: " + cidrBlock)
+                    eni.push(cidrBlock)
+                  }
                   successEnis.push(eni);
               }
               console.log(promise);
@@ -1246,3 +1259,4 @@ Outputs:
       - CustomSourceENIs
       - failedEnis
 
+      
