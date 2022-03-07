@@ -376,7 +376,20 @@ Resources:
                 
                 if(!isError)
                 {
-                    successEnis.push(eni);
+                  // get vpc cidr
+                  var vpcPromise = await ec2.describeVpcs().promise().catch((err1) => {
+                    console.error(err1)
+                  })
+                  let cidrBlock = []
+                  if (vpcPromise !== undefined && vpcPromise["Vpcs"]) {
+                    vpcPromise["Vpcs"].forEach((x) => {
+                      cidrBlock.push(x["CidrBlock"])
+                    })
+                    console.log("cidrBlock: " + cidrBlock)
+                    eni.push(cidrBlock)
+                  }
+                  
+                  successEnis.push(eni);
                 }
                 
             }
@@ -656,6 +669,7 @@ Resources:
                   - 'ec2:DescribeNetworkInterfaces'
                   - 'ec2:DescribeTrafficMirrorSessions'
                   - 'ec2:Describeinstances'
+                  - 'ec2:DescribeVpcs'
                   - 'ec2:DescribeTrafficMirrorFilters'
                   - 'ec2:DeleteTrafficMirrorFilterRule'
                   - 'ec2:CreateTrafficMirrorFilterRule'
