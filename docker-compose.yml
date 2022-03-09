@@ -63,7 +63,7 @@ services:
       - mongo
   
   akto-api-security-mirror-api-logging:
-    image: aktosecurity/mirror-api-logging:latest
+    image: aktosecurity/mirror-api-logging:local
     env_file: ./docker.env
     restart: always
     depends_on:
