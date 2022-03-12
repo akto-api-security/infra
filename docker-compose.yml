@@ -36,12 +36,6 @@ services:
     depends_on:
       - zoo1
 
-  akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:latest
-    env_file: ./docker.env
-    restart: always
-    ports: 
-      - "8080:8080"
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker.env
