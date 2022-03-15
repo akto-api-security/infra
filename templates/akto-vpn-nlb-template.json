@@ -22,9 +22,9 @@
         },
         "AktoInstanceType": {
             "Description": "Instance type to be allocated to Akto",
-            "ConstraintDescription": "Must be a valid EC2 instance type",
+            "ConstraintDescription": "Must be a valid EC2 instance type. Preferably, choose Intel series (M5 or C6I)",
             "Type": "String",
-            "Default": "t3.medium"
+            "Default": "m5.xlarge"
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
