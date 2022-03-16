@@ -12,7 +12,7 @@ Parameters:
   MirroringSessionNumber:
     Description: 'Unique mirroring session number to be used for mirroring session'
     Type: String
-    Default: '10'
+    Default: '1'
   
   TargetENI:
     Description: 'ENI Id of target network interface'
