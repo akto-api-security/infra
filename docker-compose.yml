@@ -50,7 +50,7 @@ services:
       - kafka1
   
   akto-api-security-mirror-api-logging:
-    image: aktosecurity/mirror-api-logging:local
+    image: aktosecurity/mirror-api-logging:latest
     env_file: ./docker.env
     restart: always
     depends_on:
