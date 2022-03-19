@@ -72,13 +72,13 @@
         }
     },
     "Resources": {
-        "AktoSecurityGroup": {
+        "AktoMongoSecurityGroup":{
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "GroupDescription": "Enable the ports Akto requires (22, 8080, 4789, 9092)",
+                "GroupDescription": "Enable the ports Mongo requires (22, 27017)",
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
@@ -90,8 +90,107 @@
                     },
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 8080,
-                        "ToPort": 8080,
+                        "FromPort": 27017,
+                        "ToPort": 27017,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "01a51caa-b901-42f9-bd49-62222c5367a1"
+                }
+            }
+        },
+
+        "AktoMongoInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Akto Mongo instance"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "50"
+                        }
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "NetworkInterfaces": [
+                    { 
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": {
+                            "Ref": "AssociatePublicIpAddress"
+                        },
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoMongoSecurityGroup" }]
+                    }
+                ],        
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "export COMPOSE_FILE=docker-compose-mongo.yml",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    "./cf-deploy-akto < <(echo 'test')",
+                    
+                    {"Fn::Join": ["", 
+                    ["sudo /opt/aws/bin/cfn-signal -s true",
+                    "         --stack ", { "Ref" : "AWS::StackName" },
+                    "         --resource AktoMongoInstance",
+                    "         --region ", { "Ref" : "AWS::Region" }]]}
+                    ]]
+                }}
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                }
+            }
+        },
+
+
+
+        "AktoSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "GroupDescription": "Enable the ports Akto requires (22, 4789, 9092)",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
                         "CidrIp": {
                             "Ref": "VpcCIDR"
                         }
@@ -125,6 +224,115 @@
         },
         "AktoInstance": {
             "Type": "AWS::EC2::Instance",
+            "DependsOn": "AktoMongoInstance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Akto Runtime instance"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "50"
+                        }
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "NetworkInterfaces": [
+                    { 
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": {
+                            "Ref": "AssociatePublicIpAddress"
+                        },
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
+                    }
+                ],        
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'",
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "export COMPOSE_FILE=docker-compose-runtime.yml",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    "./cf-deploy-akto < <(echo 'test')",
+                    
+                    {"Fn::Join": ["", 
+                    ["sudo /opt/aws/bin/cfn-signal -s true",
+                    "         --stack ", { "Ref" : "AWS::StackName" },
+                    "         --resource AktoInstance",
+                    "         --region ", { "Ref" : "AWS::Region" }]]}
+                    ]]
+                }}
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                }
+            }
+        },
+
+
+
+        "AktoDashboardSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "GroupDescription": "Enable the ports Akto requires (22, 8080)",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "01a51caa-b901-42f9-bd49-62222c5367a1"
+                }
+            }
+        },
+        "AktoDashboardInstance": {
+            "Type": "AWS::EC2::Instance",
+            "DependsOn": "AktoMongoInstance",
             "Properties": {
                 "InstanceType": {
                     "Ref": "AktoInstanceType"
@@ -158,7 +366,7 @@
                             "Ref": "AssociatePublicIpAddress"
                         },
                         "DeviceIndex": "0",
-                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
+                        "GroupSet": [{ "Ref" : "AktoDashboardSecurityGroup" }]
                     }
                 ],        
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
@@ -170,9 +378,10 @@
                     "sudo yum install -y docker",
                     "sudo dockerd&",
                     "sudo mkdir -p /opt/aws/bin",
+                    "export COMPOSE_FILE=docker-compose-dashboard.yml",
                     "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
                     "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
-                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/self_hosting/cf-deploy-akto' > cf-deploy-akto",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
                     "./cf-deploy-akto < <(echo 'test')",
                     
@@ -208,7 +417,7 @@
                 "HealthCheckEnabled" : "true",
                 "HealthCheckIntervalSeconds" : 10,
                 "HealthCheckPath" : "/metrics",
-                "HealthCheckPort" : "8080",
+                "HealthCheckPort" : "8000",
                 "HealthCheckProtocol" : "HTTP",
                 "HealthCheckTimeoutSeconds" : 6,
                 "HealthyThresholdCount" : 2,
@@ -252,7 +461,7 @@
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
                 "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
+                    "Id" : { "Ref":"AktoDashboardInstance"}
                     }],
                 "Name" : "AktoDashboardTargetGroup"
             }
@@ -280,7 +489,7 @@
                 "HealthCheckEnabled" : "true",
                 "HealthCheckIntervalSeconds" : 10,
                 "HealthCheckPath" : "/metrics",
-                "HealthCheckPort" : "8080",
+                "HealthCheckPort" : "8000",
                 "HealthCheckProtocol" : "HTTP",
                 "HealthCheckTimeoutSeconds" : 6,
                 "HealthyThresholdCount" : 2,
