@@ -34,7 +34,7 @@
       }
     },
 
-    "ALBListener" : {
+    "ALBListenerHTTPS" : {
       "Type" : "AWS::ElasticLoadBalancingV2::Listener",
       "Properties" : {
         "DefaultActions" : [{
@@ -48,6 +48,19 @@
           "CertificateArn": "arn:aws:acm:us-east-1:233905125530:certificate/c3e59053-07ce-4bea-a32f-7013e216fb6d"
         }],
         "SslPolicy": "ELBSecurityPolicy-TLS-1-2-Ext-2018-06"
+      }
+    },
+
+    "ALBListenerHTTP" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties" : {
+        "DefaultActions" : [{
+          "Type" : "forward",
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroup" }
+        }],
+        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
+        "Port" : 80,
+        "Protocol" : "HTTP"
       }
     },
 
@@ -148,12 +161,19 @@
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "GroupDescription" : "Enable HTTPs access on the inbound port",
-        "SecurityGroupIngress" : [ {
-          "IpProtocol" : "tcp",
-          "FromPort" : "443",
-          "ToPort" : "443",
-          "CidrIp" : "0.0.0.0/0"
-        }
+        "SecurityGroupIngress" : [ 
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "443",
+            "ToPort" : "443",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "80",
+            "ToPort" : "80",
+            "CidrIp" : "0.0.0.0/0"
+          }
        ]
       }
     }

@@ -197,7 +197,13 @@
               "Scheme": "internal",
               "IpAddressType": "ipv4",
               "Subnets" : [{"Ref" : "SubnetId"}],
-              "Name" : "AktoNLB"
+              "Name" : "AktoNLB",
+              "LoadBalancerAttributes": [
+                {
+                    "Key": "load_balancing.cross_zone.enabled",
+                    "Value": "true"
+                }
+              ]  
             }
         },
         "AktoTrafficMirroringTargetGroup"  :{
