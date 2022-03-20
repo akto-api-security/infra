@@ -38,15 +38,14 @@ services:
 
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:latest
-    env_file: ./docker.env
+    env_file: ./docker-runtime.env
     restart: always
     depends_on:
       - kafka1
-      - mongo
   
   akto-api-security-mirror-api-logging:
     image: aktosecurity/mirror-api-logging:local
-    env_file: ./docker.env
+    env_file: ./docker-runtime.env
     restart: always
     depends_on:
       - kafka1
