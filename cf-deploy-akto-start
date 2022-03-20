@@ -27,6 +27,8 @@ else
   export BOLD=""
 fi
 
+cd ~/akto/infra
+
 $MAYBE_SUDO docker-compose up
 
 echo ""
