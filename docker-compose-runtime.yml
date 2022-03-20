@@ -52,7 +52,7 @@ services:
     network_mode: host
 
   akto-hello-world:
-    image: aktosecurity/hello-world-server:latest
+    image: hotavneesh/hello-world-server:latest
     restart: always
     ports: 
       - "8000:8000"
