@@ -139,9 +139,7 @@
                 "NetworkInterfaces": [
                     { 
                         "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": {
-                            "Ref": "AssociatePublicIpAddress"
-                        },
+                        "AssociatePublicIpAddress": "false",
                         "DeviceIndex": "0",
                         "GroupSet": [{ "Ref" : "AktoMongoSecurityGroup" }]
                     }
@@ -161,6 +159,9 @@
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
                     "./cf-deploy-akto < <(echo 'test')",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')",
                     
                     {"Fn::Join": ["", 
                     ["sudo /opt/aws/bin/cfn-signal -s true",
@@ -254,9 +255,7 @@
                 "NetworkInterfaces": [
                     { 
                         "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": {
-                            "Ref": "AssociatePublicIpAddress"
-                        },
+                        "AssociatePublicIpAddress": "false",
                         "DeviceIndex": "0",
                         "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
                     }
@@ -264,7 +263,6 @@
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
                     "#!/bin/bash -xe",
                     { "Fn::Sub": "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'" },
-                    "echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> docker-runtime.env",
                     "touch /tmp/hello.txt",
                     "touch ~/hello.txt",
                     "sudo yum update -y",
@@ -278,6 +276,10 @@
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
                     "./cf-deploy-akto < <(echo 'test')",
+                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-runtime.env",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')",
                     
                     {"Fn::Join": ["", 
                     ["sudo /opt/aws/bin/cfn-signal -s true",
@@ -375,9 +377,7 @@
                     "touch /tmp/hello.txt",
                     "touch ~/hello.txt",
                     { "Fn::Sub": "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'" },
-                    "echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> docker-dashboard.env",
                     { "Fn::Sub": "export AKTO_KAFKA_BROKER_URL='${AktoNLB.DNSName}'" },
-                    "echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> docker-dashboard.env",
                     "sudo yum update -y",
                     "sudo yum install -y python python-setuptools",
                     "sudo yum install -y docker",
@@ -389,6 +389,11 @@
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
                     "./cf-deploy-akto < <(echo 'test')",
+                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env",
+                    "sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')",
                     
                     {"Fn::Join": ["", 
                     ["sudo /opt/aws/bin/cfn-signal -s true",
