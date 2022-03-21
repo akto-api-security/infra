@@ -42,6 +42,24 @@ services:
     depends_on:
       - zoo1
 
+  mongo:
+    container_name: mongo
+    image: mongo
+    restart: on-failure:10
+    volumes:
+      - ./data:/data/db
+    ports:
+      - "27017:27017"
+
+  akto-api-security-dashboard:
+    image: aktosecurity/akto-api-security-dashboard:latest
+    env_file: ./docker.env
+    restart: always
+    ports: 
+      - "8080:8080"
+    depends_on:
+      - mongo
+
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:local
     env_file: ./docker.env
