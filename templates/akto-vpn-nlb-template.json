@@ -15,7 +15,12 @@
             "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
             "Type": "AWS::EC2::Subnet::Id",
             "ConstraintDescription": "must be an existing subnet"
-        },        
+        },  
+        "AZ": {
+            "Description": "Select AZ of the subnet id you mentioned",
+            "Type": "AWS::EC2::AvailabilityZone::Name",
+            "ConstraintDescription": "must be az of the subnet"
+        },   
         "KeyPair": {
             "Description": "Select the key pair to connect to Akto EC2 instance",
             "Type": "AWS::EC2::KeyPair::KeyName"
@@ -123,21 +128,23 @@
                 }
             }
         },
-        "AktoInstance": {
-            "Type": "AWS::EC2::Instance",
+        "AktoASGLaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
             "Properties": {
-                "InstanceType": {
-                    "Ref": "AktoInstanceType"
-                },
                 "ImageId": {
                     "Ref": "LatestAmiId"
                 },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Akto instance"
-                    }
-                ],
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "LaunchConfigurationName": "AktoLaunchConfiguration",
+                "AssociatePublicIpAddress": {
+                    "Ref": "AssociatePublicIpAddress"
+                },
+                "SecurityGroups": [{ "Ref" : "AktoSecurityGroup" }],
                 "BlockDeviceMappings": [
                     {
                         "DeviceName": "/dev/xvda",
@@ -148,19 +155,6 @@
                         }
                     }
                 ],
-                "KeyName": {
-                    "Ref": "KeyPair"
-                },
-                "NetworkInterfaces": [
-                    { 
-                        "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": {
-                            "Ref": "AssociatePublicIpAddress"
-                        },
-                        "DeviceIndex": "0",
-                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
-                    }
-                ],        
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
                     "#!/bin/bash -xe",
                     "touch /tmp/hello.txt",
@@ -172,22 +166,45 @@
                     "sudo mkdir -p /opt/aws/bin",
                     "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
                     "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -L -XGET -o hello_world.zip https://github.com/avneesh99/gorestapi/archive/refs/heads/feature/master.zip",
+                    "unzip hello_world.zip",
+                    "./gorestapi-master/restapi 2> /dev/null 1> /dev/null &",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/scale_up/cf-deploy-akto' > cf-deploy-akto",
                     "sudo chmod 700 cf-deploy-akto",
-                    "./cf-deploy-akto < <(echo 'test')",
+                    "./cf-deploy-akto < <(echo 'test')"
                     
-                    {"Fn::Join": ["", 
-                    ["sudo /opt/aws/bin/cfn-signal -s true",
-                    "         --stack ", { "Ref" : "AWS::StackName" },
-                    "         --resource AktoInstance",
-                    "         --region ", { "Ref" : "AWS::Region" }]]}
                     ]]
                 }}
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
-                }
+            }
+        },
+        "AktoAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AvailabilityZones": [{"Ref": "AZ"}],
+                "AutoScalingGroupName": "AktoAutoScalingGroup",
+                "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
+                "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
+                "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}],
+                "MaxSize": "10",
+                "MinSize": "1"   
+            }
+        },
+        "AktoScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
+                "Cooldown": "60",
+                "ScalingAdjustment": 1
+            }
+        },
+        "AktoScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
+                "Cooldown": "60",
+                "ScalingAdjustment": -1
             }
         },
         "AktoNLB" : {
@@ -221,9 +238,6 @@
                 "UnhealthyThresholdCount" : 2,
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
                 "Name" : "AktoTrafficMirroringTargetGroup"
             }
         },
@@ -257,9 +271,6 @@
         
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
                 "Name" : "AktoDashboardTargetGroup"
             }
         },
@@ -292,9 +303,6 @@
                 "HealthyThresholdCount" : 2,
                 "UnhealthyThresholdCount" : 2,
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
                 "Name" : "AktoKafkaTargetGroup"
             }
         },
