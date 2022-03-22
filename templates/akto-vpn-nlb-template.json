@@ -166,7 +166,7 @@
                     "sudo mkdir -p /opt/aws/bin",
                     "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
                     "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
-                    "curl -L -XGET -o hello_world.zip https://github.com/avneesh99/gorestapi/archive/refs/heads/feature/master.zip",
+                    "curl -L -XGET -o hello_world.zip https://github.com/avneesh99/gorestapi/archive/refs/heads/master.zip",
                     "unzip hello_world.zip",
                     "./gorestapi-master/restapi 2> /dev/null 1> /dev/null &",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/scale_up/cf-deploy-akto' > cf-deploy-akto",
