@@ -191,7 +191,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "GroupDescription": "Enable the ports Akto requires (22, 4789, 9092)",
+                "GroupDescription": "Enable the ports Akto requires (22, 4789, 8000, 9092)",
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
@@ -213,6 +213,14 @@
                         "IpProtocol": "udp",
                         "FromPort": 4789,
                         "ToPort": 4789,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8000,
+                        "ToPort": 8000,
                         "CidrIp": {
                             "Ref": "VpcCIDR"
                         }
@@ -279,13 +287,8 @@
                     "sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP:9092 >> ~/akto/infra/.env",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
                     "sudo chmod 700 cf-deploy-akto-start",
-                    "./cf-deploy-akto-start < <(echo 'test')",
+                    "./cf-deploy-akto-start < <(echo 'test')"
                     
-                    {"Fn::Join": ["", 
-                    ["sudo /opt/aws/bin/cfn-signal -s true",
-                    "         --stack ", { "Ref" : "AWS::StackName" },
-                    "         --resource AktoInstance",
-                    "         --region ", { "Ref" : "AWS::Region" }]]}
                     ]]
                 }}
             }
@@ -297,41 +300,26 @@
                 "AutoScalingGroupName": "AktoAutoScalingGroup",
                 "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
                 "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
-                "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}],
+                "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}, {"Ref": "AktoKafkaTargetGroup"}],
                 "MaxSize": "10",
                 "MinSize": "1"   
             }
         },
-        "AktoScaleUpPolicy": {
+        "AktoTargetTrackingNetworkPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
-                "AdjustmentType": "ChangeInCapacity",
+                "PolicyType": "TargetTrackingScaling",
                 "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
-                "Cooldown": "60",
-                "ScalingAdjustment": 1
-            }
-        },
-        "AktoScaleDownPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Properties": {
-                "AdjustmentType": "ChangeInCapacity",
-                "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
-                "Cooldown": "60",
-                "ScalingAdjustment": -1
-            }
-        },
-        
-        "AktoInstance": {
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                "EstimatedInstanceWarmup": 30,
+                "TargetTrackingConfiguration":{
+                    "PredefinedMetricSpecification" : {
+                        "PredefinedMetricType": "ASGAverageNetworkIn"
+                    },
+                    "TargetValue" : 200000000
                 }
             }
         },
-
-
-
+        
         "AktoDashboardSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -380,7 +368,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "Akto instance"
+                        "Value": "Akto Dashboard instance"
                     }
                 ],
                 "BlockDeviceMappings": [
@@ -433,7 +421,7 @@
                     {"Fn::Join": ["", 
                     ["sudo /opt/aws/bin/cfn-signal -s true",
                     "         --stack ", { "Ref" : "AWS::StackName" },
-                    "         --resource AktoInstance",
+                    "         --resource AktoDashboardInstance",
                     "         --region ", { "Ref" : "AWS::Region" }]]}
                     ]]
                 }}
@@ -469,9 +457,7 @@
                 "UnhealthyThresholdCount" : 2,
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
+                "Targets" : [],
                 "Name" : "AktoTrafficMirroringTargetGroup"
             }
         },
@@ -540,9 +526,7 @@
                 "HealthyThresholdCount" : 2,
                 "UnhealthyThresholdCount" : 2,
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoInstance"}
-                    }],
+                "Targets" : [],
                 "Name" : "AktoKafkaTargetGroup"
             }
         },
