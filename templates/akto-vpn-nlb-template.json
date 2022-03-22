@@ -2,6 +2,11 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template does a simple setup for all Akto modules. It sets up all modules on a single instance. If you want a scalable and flexible setup, please contact support@akto.io.",
     "Parameters": {
+        "AZ": {
+            "Description": "Select AZ of the subnet id you mentioned",
+            "Type": "AWS::EC2::AvailabilityZone::Name",
+            "ConstraintDescription": "must be az of the subnet"
+        },   
         "VPC": {
             "Description": "The VPC where Akto will run",
             "Type": "AWS::EC2::VPC::Id"
@@ -180,8 +185,6 @@
             }
         },
 
-
-
         "AktoSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -225,22 +228,25 @@
                 }
             }
         },
-        "AktoInstance": {
-            "Type": "AWS::EC2::Instance",
+
+        "AktoASGLaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
             "DependsOn": ["AktoMongoInstance", "AktoNLB"],
             "Properties": {
-                "InstanceType": {
-                    "Ref": "AktoInstanceType"
-                },
                 "ImageId": {
                     "Ref": "LatestAmiId"
                 },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Akto Runtime instance"
-                    }
-                ],
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "LaunchConfigurationName": "AktoLaunchConfiguration",
+                "AssociatePublicIpAddress": {
+                    "Ref": "AssociatePublicIpAddress"
+                },
+                "SecurityGroups": [{ "Ref" : "AktoSecurityGroup" }],
                 "BlockDeviceMappings": [
                     {
                         "DeviceName": "/dev/xvda",
@@ -251,19 +257,6 @@
                         }
                     }
                 ],
-                "KeyName": {
-                    "Ref": "KeyPair"
-                },
-                "NetworkInterfaces": [
-                    { 
-                        "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": {
-                            "Ref": "AssociatePublicIpAddress"
-                        },
-                        "DeviceIndex": "0",
-                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
-                    }
-                ],        
                 "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
                     "#!/bin/bash -xe",
                     { "Fn::Sub": "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'" },
@@ -295,6 +288,40 @@
                     "         --region ", { "Ref" : "AWS::Region" }]]}
                     ]]
                 }}
+            }
+        },
+        "AktoAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AvailabilityZones": [{"Ref": "AZ"}],
+                "AutoScalingGroupName": "AktoAutoScalingGroup",
+                "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
+                "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
+                "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}],
+                "MaxSize": "10",
+                "MinSize": "1"   
+            }
+        },
+        "AktoScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
+                "Cooldown": "60",
+                "ScalingAdjustment": 1
+            }
+        },
+        "AktoScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {"Ref": "AktoAutoScalingGroup"},
+                "Cooldown": "60",
+                "ScalingAdjustment": -1
+            }
+        },
+        
+        "AktoInstance": {
             },
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
