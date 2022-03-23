@@ -2,8 +2,8 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template does a simple setup for all Akto modules. It sets up all modules on a single instance. If you want a scalable and flexible setup, please contact support@akto.io.",
     "Parameters": {
-        "AZ": {
-            "Description": "Select AZ of the subnet id you mentioned",
+        "AktoAZ": {
+            "Description": "Select AZ of the subnet id you mentioned.",
             "Type": "AWS::EC2::AvailabilityZone::Name",
             "ConstraintDescription": "must be az of the subnet"
         },   
@@ -439,7 +439,13 @@
               "Scheme": "internal",
               "IpAddressType": "ipv4",
               "Subnets" : [{"Ref" : "SubnetId"}],
-              "Name" : "AktoNLB"
+              "Name" : "AktoNLB",
+              "LoadBalancerAttributes": [
+                {
+                    "Key": "load_balancing.cross_zone.enabled",
+                    "Value": "true"
+                }
+              ]
             }
         },
         "AktoTrafficMirroringTargetGroup"  :{
