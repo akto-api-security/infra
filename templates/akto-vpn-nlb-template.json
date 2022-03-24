@@ -2,11 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template does a simple setup for all Akto modules. It sets up all modules on a single instance. If you want a scalable and flexible setup, please contact support@akto.io.",
     "Parameters": {
-        "AktoAZ": {
-            "Description": "Select AZ of the subnet id you mentioned.",
-            "Type": "AWS::EC2::AvailabilityZone::Name",
-            "ConstraintDescription": "must be az of the subnet"
-        },   
         "VPC": {
             "Description": "The VPC where Akto will run",
             "Type": "AWS::EC2::VPC::Id"
@@ -296,7 +291,6 @@
         "AktoAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AvailabilityZones": [{"Ref": "AktoAZ"}],
                 "AutoScalingGroupName": "AktoAutoScalingGroup",
                 "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
                 "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
