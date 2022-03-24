@@ -296,7 +296,7 @@
         "AktoAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AvailabilityZones": [{"Ref": "AZ"}],
+                "AvailabilityZones": [{"Ref": "AktoAZ"}],
                 "AutoScalingGroupName": "AktoAutoScalingGroup",
                 "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
                 "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
