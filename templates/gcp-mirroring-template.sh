@@ -20,7 +20,7 @@ check_error() {
   fi
 }
 confirm() {
-  # call with a prompt string or use a default
+  #call with a prompt string or use a default
   read -r -p "Are you sure? [y/N] " response
   case "$response" in
     [yY][eE][sS]|[yY])
@@ -123,10 +123,11 @@ create_instance_template() {
     --project "$PROJECT"
     --labels "name=receiver"
     --region "$REGION" 
-    --machine-type "n2-standard-2" 
+    --machine-type "n2-standard-4" 
     --network-interface "network=$NETWORK,subnet=$SUBNET,network-tier=PREMIUM,no-address" 
     --maintenance-policy "MIGRATE" 
     --scopes "storage-ro,logging-write,monitoring-write,service-control,service-management,trace"
+    --create-disk "auto-delete=yes,boot=yes,image=projects/debian-cloud/global/images/debian-10-buster-v20220317,mode=rw,size=30,type=pd-balanced" 
     --metadata AktoMongoInstancePrivateIp=$AktoMongoInstancePrivateIp,AktoLoadBalancerPrivateIp=$AktoLoadBalancerPrivateIp,startup-script='#! /bin/bash
         AktoMongoInstancePrivateIp=$(curl http://metadata.google.internal/computeMetadata/v1/instance/attributes/AktoMongoInstancePrivateIp -H "Metadata-Flavor: Google")
         AktoLoadBalancerPrivateIp=$(curl http://metadata.google.internal/computeMetadata/v1/instance/attributes/AktoLoadBalancerPrivateIp -H "Metadata-Flavor: Google")
@@ -193,13 +194,15 @@ create_ig() {
         --project "$PROJECT"
         --region "$REGION"
         --cool-down-period 60 
-        --max-num-replicas 5 
+        --max-num-replicas 10 
         --min-num-replicas 1 
         --mode "on" 
-        --update-stackdriver-metric=compute.googleapis.com/instance/network/received_bytes_count 
-        --stackdriver-metric-filter='metric.labels.loadbalanced = true'
-        --stackdriver-metric-utilization-target=200000000.0 
-        --stackdriver-metric-utilization-target-type=gauge)
+        --target-cpu-utilization 0.7
+        # --update-stackdriver-metric=compute.googleapis.com/instance/network/received_bytes_count 
+        # --stackdriver-metric-filter='metric.labels.loadbalanced = true'
+        # --stackdriver-metric-utilization-target=200000000.0 
+        # --stackdriver-metric-utilization-target-type=gauge
+        )
     err=$(gcloud "${args[@]}" 2>&1 >/dev/null)
     check_error "$err"
 }
@@ -268,7 +271,7 @@ create_instance_mongo() {
         --project "$PROJECT"
         # --REGION "$REGION"
         --zone "$ZONE" 
-        --machine-type "e2-standard-2" 
+        --machine-type "n2-standard-4" 
         --network-interface "network=$NETWORK,subnet=$SUBNET,network-tier=PREMIUM,no-address"
         --maintenance-policy "MIGRATE" 
         --scopes "storage-ro,logging-write,monitoring-write,service-control,service-management,trace"
@@ -321,7 +324,7 @@ create_instance_dashboard() {
     args=(compute instances create "$akto_instance_dashboard" 
         --project "$PROJECT"
         --zone "$ZONE" 
-        --machine-type "e2-standard-2" 
+        --machine-type "n2-standard-4" 
         --network-interface "network=$NETWORK,subnet=$SUBNET,network-tier=PREMIUM"
         --maintenance-policy "MIGRATE" 
         --scopes "storage-ro,logging-write,monitoring-write,service-control,service-management,trace"
