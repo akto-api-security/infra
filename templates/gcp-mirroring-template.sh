@@ -140,6 +140,7 @@ create_instance_template() {
         apt-get install -y docker-ce docker-ce-cli containerd.io      
         export AKTO_MONGO_CONN="$AktoMongoInstancePrivateIp"
         export AKTO_KAFKA_IP="$AktoLoadBalancerPrivateIp"
+        export AKTO_INFRA_MIRRORING_MODE=gcp
         export COMPOSE_FILE=docker-compose-runtime.yml
         curl -fsSL "https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto" > cf-deploy-akto
         sudo chmod 700 cf-deploy-akto
