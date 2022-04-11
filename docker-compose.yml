@@ -38,6 +38,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_CREATE_TOPICS: "akto.api.logs:3:3"
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
+      KAFKA_LOG_RETENTION_HOURS: 5
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+      KAFKA_LOG_CLEANER_ENABLE: "true"
+      KAFKA_CLEANUP_POLICY: "delete"
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
     volumes:
       - ./data-kafka-data:/var/lib/kafka/data
       - ./data-kafka-secrets:/etc/kafka/secrets       
