@@ -11,6 +11,10 @@
             "Type": "String",
             "Default": "0.0.0.0/0"
         },    
+        "KeyPair": {
+            "Description": "Select the key pair to connect to Akto EC2 instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
         "SubnetId": {
             "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
             "Type": "AWS::EC2::Subnet::Id",
@@ -82,6 +86,14 @@
                         }
                     },
                     {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    },
+                    {
                         "IpProtocol": "udp",
                         "FromPort": 4789,
                         "ToPort": 4789,
@@ -108,6 +120,9 @@
                 },
                 "ImageId": {
                     "Ref": "LatestAmiId"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
                 },
                 "Tags": [
                     {
