@@ -72,6 +72,48 @@
         }
     },
     "Resources": {
+        "IamInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+               "Path": "/",
+               "Roles": [ {
+                  "Ref": "LambdaBasicExecutionRole"
+               } ]
+            }
+        },
+        "LambdaBasicExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ec2.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              },
+              "Policies": [{
+                  "PolicyName": "InvokeLambdaPolicy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Resource": [
+                            {"Fn::GetAtt": ["DashboardInstanceRefreshHandler","Arn"]},
+                            {"Fn::GetAtt": ["TrafficMirroringInstanceRefreshHandler","Arn"]}
+                        ],
+                        "Action": "lambda:InvokeFunction"
+                      }
+                    ]
+                  }
+              }]
+            }
+        },                
         "AktoMongoSecurityGroup":{
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -245,10 +287,11 @@
                 "KeyName": {
                     "Ref": "KeyPair"
                 },
-                "LaunchConfigurationName": "AktoLaunchConfiguration",
+                "LaunchConfigurationName": "AktoASGLaunchConfiguration",
                 "AssociatePublicIpAddress": {
                     "Ref": "AssociatePublicIpAddress"
                 },
+                "IamInstanceProfile": {"Ref": "IamInstanceProfile"},
                 "SecurityGroups": [{ "Ref" : "AktoSecurityGroup" }],
                 "BlockDeviceMappings": [
                     {
@@ -299,6 +342,62 @@
                 "MinSize": "1"   
             }
         },
+        "AktoDashboardASGLaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "DependsOn": ["AktoMongoInstance", "AktoNLB"],
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "AssociatePublicIpAddress": {
+                    "Ref": "AssociatePublicIpAddress"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "IamInstanceProfile": {"Ref": "IamInstanceProfile"},
+                "SecurityGroups": [{ "Ref" : "AktoDashboardSecurityGroup" }],                
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    { "Fn::Sub": "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'" },
+                    { "Fn::Sub": "export AKTO_KAFKA_BROKER_URL='${AktoNLB.DNSName}'" },
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "export COMPOSE_FILE=docker-compose-dashboard.yml",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    "./cf-deploy-akto < <(echo 'test')",
+                    "sudo echo >> ~/akto/infra/docker-dashboard.env",
+                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env",
+                    "sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')"
+                    ]]
+                }}
+            }
+        },
+        "AktoDashboardAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": "AktoDashboardAutoScalingGroup",
+                "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
+                "LaunchConfigurationName": {"Ref": "AktoDashboardASGLaunchConfiguration"},
+                "TargetGroupARNs": [{"Ref": "AktoDashboardTargetGroup2"}],
+                "MaxSize": "10",
+                "MinSize": "1"   
+            }
+        },
         "AktoTargetTrackingNetworkPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
@@ -313,7 +412,20 @@
                 }
             }
         },
-        
+        "AktoDashboardTargetTrackingNetworkPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyType": "TargetTrackingScaling",
+                "AutoScalingGroupName": {"Ref": "AktoDashboardAutoScalingGroup"},
+                "EstimatedInstanceWarmup": 30,
+                "TargetTrackingConfiguration":{
+                    "PredefinedMetricSpecification" : {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue" : 60
+                }
+            }
+        },        
         "AktoDashboardSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -349,83 +461,6 @@
                 }
             }
         },
-        "AktoDashboardInstance": {
-            "Type": "AWS::EC2::Instance",
-            "DependsOn": ["AktoMongoInstance", "AktoNLB"],
-            "Properties": {
-                "InstanceType": {
-                    "Ref": "AktoInstanceType"
-                },
-                "ImageId": {
-                    "Ref": "LatestAmiId"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Akto Dashboard instance"
-                    }
-                ],
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "VolumeType": "gp2",
-                            "DeleteOnTermination": "true",
-                            "VolumeSize": "50"
-                        }
-                    }
-                ],
-                "KeyName": {
-                    "Ref": "KeyPair"
-                },
-                "NetworkInterfaces": [
-                    { 
-                        "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": {
-                            "Ref": "AssociatePublicIpAddress"
-                        },
-                        "DeviceIndex": "0",
-                        "GroupSet": [{ "Ref" : "AktoDashboardSecurityGroup" }]
-                    }
-                ],        
-                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
-                    "#!/bin/bash -xe",
-                    "touch /tmp/hello.txt",
-                    "touch ~/hello.txt",
-                    { "Fn::Sub": "export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'" },
-                    { "Fn::Sub": "export AKTO_KAFKA_BROKER_URL='${AktoNLB.DNSName}'" },
-                    "sudo yum update -y",
-                    "sudo yum install -y python python-setuptools",
-                    "sudo yum install -y docker",
-                    "sudo dockerd&",
-                    "sudo mkdir -p /opt/aws/bin",
-                    "export COMPOSE_FILE=docker-compose-dashboard.yml",
-                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
-                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
-                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto",
-                    "sudo chmod 700 cf-deploy-akto",
-                    "./cf-deploy-akto < <(echo 'test')",
-                    "sudo echo >> ~/akto/infra/docker-dashboard.env",
-                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env",
-                    "sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env",
-                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
-                    "sudo chmod 700 cf-deploy-akto-start",
-                    "./cf-deploy-akto-start < <(echo 'test')",
-                    
-                    {"Fn::Join": ["", 
-                    ["sudo /opt/aws/bin/cfn-signal -s true",
-                    "         --stack ", { "Ref" : "AWS::StackName" },
-                    "         --resource AktoDashboardInstance",
-                    "         --region ", { "Ref" : "AWS::Region" }]]}
-                    ]]
-                }}
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
-                }
-            }
-        },
         "AktoNLB" : {
             "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties"  :{
@@ -434,6 +469,21 @@
               "IpAddressType": "ipv4",
               "Subnets" : [{"Ref" : "SubnetId"}],
               "Name" : "AktoNLB",
+              "LoadBalancerAttributes": [
+                {
+                    "Key": "load_balancing.cross_zone.enabled",
+                    "Value": "true"
+                }
+              ]
+            }
+        },
+        "AktoLBDashboard" : {
+            "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties"  :{
+              "Type"  :"network",
+              "IpAddressType": "ipv4",
+              "Subnets" : [{"Ref" : "SubnetId"}],
+              "Name" : "AktoLBDashboard",
               "LoadBalancerAttributes": [
                 {
                     "Key": "load_balancing.cross_zone.enabled",
@@ -475,7 +525,7 @@
                 ]   
             }
         },
-        "AktoDashboardTargetGroup"  :{
+        "AktoDashboardTargetGroup2"  :{
             "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties" : {
                 "Port" : "8080",
@@ -491,22 +541,20 @@
         
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [{
-                    "Id" : { "Ref":"AktoDashboardInstance"}
-                    }],
-                "Name" : "AktoDashboardTargetGroup"
+                "Targets" : [],
+                "Name" : "AktoDashboardTargetGroup2"
             }
         },
         "AktoDashboardListener" : {
             "Type" : "AWS::ElasticLoadBalancingV2::Listener",
             "Properties" : {
-                "LoadBalancerArn" : {"Ref" : "AktoNLB"},
+                "LoadBalancerArn" : {"Ref" : "AktoLBDashboard"},
                 "Port" : "80",
                 "Protocol" : "TCP",
                 "DefaultActions" : [
                     {
                         "Type" : "forward",
-                        "TargetGroupArn" : {"Ref" : "AktoDashboardTargetGroup"}
+                        "TargetGroupArn" : {"Ref" : "AktoDashboardTargetGroup2"}
                     }
                 ]   
             }
@@ -543,12 +591,139 @@
                     }
                 ]   
             }
-        }
+        },
+        "DashboardInstanceRefreshHandler": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "FunctionName": "DashboardInstanceRefreshHandler",
+                "Runtime": "nodejs12.x",
+                "Timeout": 30,
+                "Role": { "Fn::GetAtt" : ["InstanceRefreshHandlerLambdaRole", "Arn"] },
+                "Code": {
+                    "ZipFile":  { "Fn::Join": ["", [
+                        "var aws = require('aws-sdk');",
+                        "var autoscaling = new aws.AutoScaling();",
+                        "exports.handler = function(event, context) {",
+                        "    var params = {",
+                        "    AutoScalingGroupName: 'AktoDashboardAutoScalingGroup', ",
+                        "       Preferences: {",
+                        "        InstanceWarmup: 200, ",
+                        "        MinHealthyPercentage: 0",
+                        "       }",
+                        "      };",
+                        "      autoscaling.startInstanceRefresh(params, function(err, data) {",
+                        "           if(err) {",
+                        "           }",
+                        "           else {",
+                        "           }",
+                        "      })",
+                        "      ",
+                        "};"
+                      ]]}
+                }
+            }
+        },
+        "TrafficMirroringInstanceRefreshHandler": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "FunctionName": "TrafficMirroringInstanceRefreshHandler",
+                "Runtime": "nodejs12.x",
+                "Timeout": 30,
+                "Role": { "Fn::GetAtt" : ["InstanceRefreshHandlerLambdaRole", "Arn"] },
+                "Code": {
+                    "ZipFile":  { "Fn::Join": ["", [
+                        "var aws = require('aws-sdk');",
+                        "var autoscaling = new aws.AutoScaling();",
+                        "exports.handler = function(event, context) {",
+                        "    var params = {",
+                        "    AutoScalingGroupName: 'AktoAutoScalingGroup', ",
+                        "       Preferences: {",
+                        "        InstanceWarmup: 200, ",
+                        "        MinHealthyPercentage: 0",
+                        "       }",
+                        "      };",
+                        "      autoscaling.startInstanceRefresh(params, function(err, data) {",
+                        "           if(err) { console.log(err)",
+                        "           }",
+                        "           else { console.log(data)",
+                        "           }",
+                        "      })",
+                        "      ",
+                        "};"
+                      ]]}
+                }
+            }
+        },        
+        "InstanceRefreshHandlerLambdaRole" : {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": [
+                        "lambda.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Path": "/service-role/",
+              "Policies": [
+                {
+                  "PolicyName": "lambdaExecution-DashboardInstanceRefreshHandler",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:CreateLogGroup"
+                        ],
+                        "Resource": "*"
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:CreateLogStream",
+                          "logs:PutLogEvents"
+                        ],
+                        "Resource": "*"
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "autoscaling:StartInstanceRefresh",
+                          "autoscaling:Describe*",
+                          "autoscaling:UpdateAutoScalingGroup",
+                          "ec2:CreateLaunchTemplateVersion",
+                          "ec2:DescribeLaunchTemplates",
+                          "ec2:RunInstances"
+                        ],
+                        "Resource": "*"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
     },
     "Outputs": {
         "AktoNLB" : {
             "Value"  : {"Ref" : "AktoNLB"},
             "Description" : "Arn of Akto Network Load Balancer"
+        },
+        "AktoLBDashboard": {
+            "Value"  : {"Ref" : "AktoLBDashboard"},
+            "Description" : "Arn of Akto Dashboard LB"
         }
     }    
 }
