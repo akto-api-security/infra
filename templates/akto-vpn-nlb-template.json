@@ -15,7 +15,12 @@
             "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
             "Type": "AWS::EC2::Subnet::Id",
             "ConstraintDescription": "must be an existing subnet"
-        },        
+        },   
+        "PublicSubnetIds": {
+            "Type" : "List<AWS::EC2::Subnet::Id>",
+            "Description" : "The list of public subnets in your VPC. Select the 1 public subnet from the same availability zone as SubnetId",
+            "ConstraintDescription" : "must be a list of at least two existing subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."      
+        },     
         "KeyPair": {
             "Description": "Select the key pair to connect to Akto EC2 instance",
             "Type": "AWS::EC2::KeyPair::KeyName"
@@ -480,16 +485,10 @@
         "AktoLBDashboard" : {
             "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties"  :{
-              "Type"  :"network",
+              "Type"  :"application",
               "IpAddressType": "ipv4",
-              "Subnets" : [{"Ref" : "SubnetId"}],
-              "Name" : "AktoLBDashboard",
-              "LoadBalancerAttributes": [
-                {
-                    "Key": "load_balancing.cross_zone.enabled",
-                    "Value": "true"
-                }
-              ]
+              "Subnets" : {"Ref" : "PublicSubnetIds"},
+              "Name" : "AktoLBDashboard"
             }
         },
         "AktoTrafficMirroringTargetGroup"  :{
@@ -529,7 +528,7 @@
             "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties" : {
                 "Port" : "8080",
-                "Protocol" : "TCP",
+                "Protocol" : "HTTP",
                 "HealthCheckEnabled" : "true",
                 "HealthCheckIntervalSeconds" : 10,
                 "HealthCheckPath" : "/metrics",
@@ -550,7 +549,7 @@
             "Properties" : {
                 "LoadBalancerArn" : {"Ref" : "AktoLBDashboard"},
                 "Port" : "80",
-                "Protocol" : "TCP",
+                "Protocol" : "HTTP",
                 "DefaultActions" : [
                     {
                         "Type" : "forward",
