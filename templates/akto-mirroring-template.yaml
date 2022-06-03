@@ -597,8 +597,6 @@ Resources:
 
               }
 
-              for (i = 0; i < uniqueAllPortsRange.length; i++) {
-                  ++maxRuleNumber;
                   params = {
                       DestinationCidrBlock: '0.0.0.0/0',
                       RuleAction: 'accept',
@@ -606,10 +604,10 @@ Resources:
                       SourceCidrBlock: '0.0.0.0/0',
                       TrafficDirection: 'ingress',
                       TrafficMirrorFilterId: trafficMirrorFilterID,
-                      Description: 'ingress rule for port ' + JSON.stringify(uniqueAllPortsRange[i]),
+                      Description: 'ingress rule for port ' ,
                       DestinationPortRange: {
-                          FromPort: uniqueAllPortsRange[i][0],
-                          ToPort: uniqueAllPortsRange[i][1]
+                          FromPort: 0,
+                          ToPort: 65535
                       },
                       DryRun: false,
                       Protocol: 6,
@@ -625,10 +623,10 @@ Resources:
                       SourceCidrBlock: '0.0.0.0/0',
                       TrafficDirection: 'egress',
                       TrafficMirrorFilterId: trafficMirrorFilterID,
-                      Description: 'egress rule for port ' + JSON.stringify(uniqueAllPortsRange[i]),
+                      Description: 'egress rule for port ',
                       SourcePortRange: {
-                          FromPort: uniqueAllPortsRange[i][0],
-                          ToPort: uniqueAllPortsRange[i][1]
+                          FromPort: 0,
+                          ToPort: 65535
                       },
                       DryRun: false,
                       Protocol: 6,
@@ -638,7 +636,6 @@ Resources:
                       isError = true;
                   });
 
-              }
           }
 
 
