@@ -104,14 +104,7 @@
                 "Statement": [
                   {
                     "Effect": "Allow",
-                    "Resource": [
-                      {
-                        "Fn::GetAtt": [
-                          "TrafficMirroringInstanceRefreshHandler",
-                          "Arn"
-                        ]
-                      }
-                    ],
+                    "Resource": "*",
                     "Action": "lambda:InvokeFunction"
                   }
                 ]
@@ -385,6 +378,11 @@
           "Handler": "index.handler",
           "Runtime": "nodejs12.x",
           "Timeout": 30,
+          "Environment": {
+            "Variables": {
+                "ASG_NAME": {"Ref": "AktoAutoScalingGroup"}
+            }
+          },                
           "Role": {
             "Fn::GetAtt": [
               "InstanceRefreshHandlerLambdaRole",
@@ -398,9 +396,10 @@
                 [
                   "var aws = require('aws-sdk');",
                   "var autoscaling = new aws.AutoScaling();",
+                  "var asgName = process.env.ASG_NAME;",
                   "exports.handler = function(event, context) {",
                   "    var params = {",
-                  "    AutoScalingGroupName: 'AktoAutoScalingGroup', ",
+                  "    AutoScalingGroupName: asgName, ",
                   "       Preferences: {",
                   "        InstanceWarmup: 200, ",
                   "        MinHealthyPercentage: 0",
