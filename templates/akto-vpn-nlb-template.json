@@ -113,6 +113,10 @@
                             {"Fn::GetAtt": ["TrafficMirroringInstanceRefreshHandler","Arn"]}
                         ],
                         "Action": "lambda:InvokeFunction"
+                      }, {
+                        "Effect": "Allow",
+                        "Resource": "*",
+                        "Action": "lambda:listFunctions"
                       }
                     ]
                   }
@@ -595,7 +599,6 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "Handler": "index.handler",
-                "FunctionName": "DashboardInstanceRefreshHandler",
                 "Runtime": "nodejs12.x",
                 "Timeout": 30,
                 "Role": { "Fn::GetAtt" : ["InstanceRefreshHandlerLambdaRole", "Arn"] },
@@ -627,7 +630,6 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "Handler": "index.handler",
-                "FunctionName": "TrafficMirroringInstanceRefreshHandler",
                 "Runtime": "nodejs12.x",
                 "Timeout": 30,
                 "Role": { "Fn::GetAtt" : ["InstanceRefreshHandlerLambdaRole", "Arn"] },
