@@ -296,7 +296,6 @@
                 "KeyName": {
                     "Ref": "KeyPair"
                 },
-                "LaunchConfigurationName": "AktoASGLaunchConfiguration",
                 "AssociatePublicIpAddress": {
                     "Ref": "AssociatePublicIpAddress"
                 },
@@ -343,7 +342,6 @@
         "AktoAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AutoScalingGroupName": "AktoAutoScalingGroup",
                 "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
                 "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
                 "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}, {"Ref": "AktoKafkaTargetGroup"}],
@@ -399,7 +397,6 @@
         "AktoDashboardAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AutoScalingGroupName": "AktoDashboardAutoScalingGroup",
                 "VPCZoneIdentifier": [{"Ref": "SubnetId"}],
                 "LaunchConfigurationName": {"Ref": "AktoDashboardASGLaunchConfiguration"},
                 "TargetGroupARNs": [{"Ref": "AktoDashboardTargetGroup2"}],
@@ -477,7 +474,6 @@
               "Scheme": "internal",
               "IpAddressType": "ipv4",
               "Subnets" : [{"Ref" : "SubnetId"}],
-              "Name" : "AktoNLB",
               "LoadBalancerAttributes": [
                 {
                     "Key": "load_balancing.cross_zone.enabled",
@@ -491,8 +487,7 @@
             "Properties"  :{
               "Type"  :"application",
               "IpAddressType": "ipv4",
-              "Subnets" : {"Ref" : "PublicSubnetIds"},
-              "Name" : "AktoLBDashboard"
+              "Subnets" : {"Ref" : "PublicSubnetIds"}
             }
         },
         "AktoTrafficMirroringTargetGroup"  :{
@@ -510,8 +505,7 @@
                 "UnhealthyThresholdCount" : 2,
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [],
-                "Name" : "AktoTrafficMirroringTargetGroup"
+                "Targets" : []
             }
         },
         "AktoTrafficMirroringListener" : {
@@ -544,8 +538,7 @@
         
                 "TargetType" : "instance",
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [],
-                "Name" : "AktoDashboardTargetGroup2"
+                "Targets" : []
             }
         },
         "AktoDashboardListener" : {
@@ -577,8 +570,7 @@
                 "HealthyThresholdCount" : 2,
                 "UnhealthyThresholdCount" : 2,
                 "VpcId" : {"Ref":"VPC"},
-                "Targets" : [],
-                "Name" : "AktoKafkaTargetGroup"
+                "Targets" : []
             }
         },
         "AktoKafkaListener" : {
