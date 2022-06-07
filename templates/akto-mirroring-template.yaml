@@ -970,6 +970,19 @@ Resources:
 
                   console.log(JSON.stringify(failedEnis))
                   var responseData = {};
+
+                  successEnis.forEach((x) => {
+                    x[1] = ""
+                  });
+                  let set  = new Set(successEnis.map(JSON.stringify));
+                  successEnis = Array.from(set).map(JSON.parse);
+
+                  failedEnis.forEach((x) => {
+                    x[1] = ""
+                  });
+                  set  = new Set(failedEnis.map(JSON.stringify));
+                  failedEnis = Array.from(set).map(JSON.parse);
+
                   responseData['successEnis'] = JSON.stringify(successEnis);
                   responseData['failedEnis'] = JSON.stringify(failedEnis);
 
