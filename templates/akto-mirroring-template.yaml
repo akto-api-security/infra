@@ -720,7 +720,9 @@ Resources:
               if (elbNamesArray[0].trim() == "")
                   return;
 
-              var params = {};
+              var params = {
+                LoadBalancerNames: elbNamesArray
+              };
               console.log("params ", JSON.stringify(params))
               var isError = false;
               var elb = new aws.ELB();
@@ -782,7 +784,9 @@ Resources:
 
               // V2 Load balancers
 
-              params = {};
+              params = {
+                Names: elbNamesArray
+              };
               isError = false;
               data = await elbv2.describeLoadBalancers(params).promise().catch((err) => {
                   console.error(err);
