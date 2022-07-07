@@ -1162,7 +1162,7 @@ Resources:
 
                   var invokeSaveCollectionNamesLambdaParams = {
                     FunctionName: saveCollectionNamesLambdaArn,
-                    InvocationType: 'Event',
+                    InvocationType: 'RequestResponse',
                     LogType: 'Tail' ,
                     Payload: JSON.stringify(responseData)
                   }
@@ -1170,12 +1170,12 @@ Resources:
                   var lambda = new aws.Lambda();
 
                   lambda.invoke(invokeSaveCollectionNamesLambdaParams, function(err, data) {
-                    if (err) console.log("finished invoke lambda", err, err.stack); 
-                    else     console.log("finished invoke lambda", data);           
+                    if (err) console.log("finished invoke lambda err", err, err.stack); 
+                    else     console.log("finished invoke lambda data", data);           
                   });
 
-                  console.log("finished invoke lambda")
-
+                  console.log("finished invoke lambda");
+                  console.log(await wait20());
                   responseData = {}
 
                   if(targetENI.length !=0 )
@@ -1200,6 +1200,13 @@ Resources:
               }
 
           }
+
+          function wait20(){
+              return new Promise((resolve, reject) => {
+                  setTimeout(() => resolve("hello"), 20000)
+              });
+          }
+    
 
 
           async function handlePeriodicEvents(event) {
