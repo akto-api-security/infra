@@ -1,0 +1,1607 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This template does a simple setup for all Akto modules. It sets up all
+  modules on a single instance. If you want a scalable and flexible setup, please
+  contact support@akto.io.
+Parameters:
+  SubnetId:
+    Description: Select existing subnet for Akto EC2 instance. If you are choosing
+      private subnet, then make sure private subnet is configured to access public
+      internet
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: must be an existing subnet
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The list of public subnets in your VPC. Select the 1 public subnet
+      from the same availability zone as SubnetId
+    ConstraintDescription: must be a list of at least two existing subnets associated
+      with at least two different availability zones. They should be residing in the
+      selected Virtual Private Cloud.
+  KeyPair:
+    Description: Select the key pair to connect to Akto EC2 instance
+    Type: AWS::EC2::KeyPair::KeyName
+  SourceLBs:
+    Description: 'Comma separated list of loadblancer names ( eg: lb1, lb2, lb3 )'
+    Type: CommaDelimitedList
+    Default: ''    
+Resources:
+  TrafficMirrorTarget:
+    Type: 'AWS::EC2::TrafficMirrorTarget'
+    Properties:
+      Description: Traffic Mirror target set to network interface of Akto EC2 instance
+      Tags:
+        - Key: Name
+          Value: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - '-'
+              - Target
+        - Key: Deployment
+          Value: Akto-CloudFormation
+      NetworkLoadBalancerArn: !Ref AktoNLB
+  LBTrafficMirrorFilter:
+    Type: 'AWS::EC2::TrafficMirrorFilter'
+    Properties:
+      Description: Traffic mirror filter for LBs and Target Groups
+      NetworkServices:
+        - amazon-dns
+      Tags:
+        - Key: Name
+          Value: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - '-'
+              - Filter
+        - Key: Deployment
+          Value: Akto-CloudFormation
+  LambdaLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${CreateMirrorSession}'
+      RetentionInDays: 7
+  LambdaBasicExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: LBCreateTrafficMirrorSession
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DescribeTrafficMirrorSessions'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeVpcs'
+                  - 'elasticloadbalancing:DescribeLoadBalancers'
+                  - 'elasticloadbalancing:DescribeTargetGroups'
+                  - 'elasticloadbalancing:DescribeTargetHealth'
+                  - 'ec2:DescribeTrafficMirrorFilters'
+                  - 'ec2:DeleteTrafficMirrorFilterRule'
+                  - 'ec2:CreateTrafficMirrorFilterRule'
+                  - 'lambda:InvokeFunction'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateTrafficMirrorSession'
+                Resource:
+                  - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
+                  - 'arn:aws:ec2:*:*:network-interface/*'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:ec2:*:*:traffic-mirror-target/'
+                      - !Ref TrafficMirrorTarget
+                  - !Join
+                    - ''
+                    - - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DeleteTrafficMirrorSession'
+                Resource:
+                  - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
+  GetAktoSetupDetailsLambdaBasicExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: GetAktoSetupDetailsExecuteLambda
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DescribeTrafficMirrorSessions'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeVpcs'
+                  - 'elasticloadbalancing:DescribeLoadBalancers'
+                  - 'elasticloadbalancing:DescribeTargetGroups'
+                  - 'elasticloadbalancing:DescribeTargetHealth'
+                Resource: '*'                
+  LambdaLogPermissions:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      Roles:
+        - !Ref LambdaBasicExecutionRole
+      PolicyName: !Sub '${AWS::Region}-LambdaLogGroup'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}:*
+              - !Sub >-
+                arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}:*:*
+  CustomSourceENIs:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt
+        - CreateMirrorSession
+        - Arn
+      SourceLBs: !Ref SourceLBs
+      MirrorTarget: !Ref TrafficMirrorTarget
+      MirrorFilter: !Ref LBTrafficMirrorFilter
+    DependsOn: LambdaLogGroup
+  
+  GetAktoSetupDetails:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt
+        - GetAktoSetupDetailsLambdaBasicExecutionRole
+        - Arn
+      Handler: index.handler
+      Environment:
+        Variables:
+          TARGET_LB: !Ref AktoNLB
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk')
+
+          var response = require('cfn-response')
+
+          var targetLB = process.env.TARGET_LB;
+          
+          async function getAktoLBDetails() {
+            var elb = new aws.ELBv2();
+              var params = {
+                  "LoadBalancerArns" : [targetLB]
+              };
+
+
+              console.log("GASD Getting Akto LB Details : ", JSON.stringify(params));
+
+              var LBDesc = await elb.describeLoadBalancers(params).promise().catch(err=>{
+                console.log("Error describing Akto LB",err);
+              });
+              
+              if(!LBDesc.LoadBalancers[0])
+              {
+                console.log("GASD Could not find Akto Load Balancer");
+                return ;
+              }
+              
+              LBDesc = LBDesc.LoadBalancers[0];
+
+              var LBName = targetLB.substring(targetLB.indexOf('/')+1);
+              // LBname to get private ip of ENI of LB 
+
+              var eniDesc = 'ELB '+LBName;
+              var ec2 = new aws.EC2();
+              params = {
+                Filters: [{
+                  'Name' : 'description',
+                  'Values' : [eniDesc]
+                }]
+              };
+              
+              var ENIDesc = await ec2.describeNetworkInterfaces(params).promise().catch(err=>{
+                    console.log("GASD Error getting ENI Details of ENI with Description ",eniDesc, " error : ",err); 
+              });
+              
+              if(!ENIDesc.NetworkInterfaces[0])
+              {
+                console.log("GASD Coud not find Network Interface Details");
+                return ;
+                
+              }
+              
+              console.log("GASD ENIDesc: ",ENIDesc);
+              
+              LBDesc.PrivateIpAddress  = ENIDesc.NetworkInterfaces[0].PrivateIpAddress;
+              LBDesc.Subnets = LBDesc.AvailabilityZones.map(x=>x.SubnetId);
+              
+              
+              
+              console.log("GASD LoadBalancerDescription : ",JSON.stringify(LBDesc));
+              return LBDesc;
+              
+          } 
+
+          exports.handler = async function(event, context) {
+            if (event.RequestType == "Delete") {
+                await response.send(event, context, "SUCCESS");
+                return;
+            }            
+            var responseData = {}
+            responseData['successEnis'] = JSON.stringify([]);            
+            var aktoDetails = await getAktoLBDetails();
+            responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+            responseData['SubnetId'] = aktoDetails.Subnets;
+            responseData['VpcId'] = aktoDetails.VpcId;
+            console.log("GASD responseData", responseData);
+            await response.send(event, context, "SUCCESS", responseData);
+          };
+
+  CustomSourceAktoSetupDetails:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt
+        - GetAktoSetupDetails
+        - Arn
+  
+  CreateMirrorSession:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt
+        - LambdaBasicExecutionRole
+        - Arn
+      Handler: index.handler
+      Environment:
+        Variables:
+          ELB_NAMES: !Join
+            - ','
+            - !Ref SourceLBs
+          TRAFFIC_MIRROR_FILTER_ID: !Ref LBTrafficMirrorFilter
+          TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
+          TARGET_LB: !Ref AktoNLB
+          SAVE_COLLECTION_NAMES_LAMBDA_ARN: !GetAtt
+            - SaveCollectionNames
+            - Arn
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk')
+
+          var response = require('cfn-response')
+
+          var saveCollectionNamesLambdaArn = process.env.SAVE_COLLECTION_NAMES_LAMBDA_ARN;
+          var trafficMirrorTargetID = process.env.TRAFFIC_MIRROR_TARGET_ID;
+
+          var trafficMirrorFilterID = process.env.TRAFFIC_MIRROR_FILTER_ID;
+
+          var mirrorSessionNumber = 1;
+
+          var tgNamesArray = process.env.ELB_NAMES.split(",").map(item
+          => item.trim());;
+
+          var elbNamesArray = process.env.ELB_NAMES.split(",").map(item =>
+          item.trim());;
+
+          var sampleSize = 100;
+          var targetLB = process.env.TARGET_LB;
+          function filterDuplicates(value, index, self) {
+              return self.indexOf(value) === index;
+          }
+
+
+          function existIn2dArray(src, key) {
+              var matched = false;
+              for (var i = 0; i < src.length; i++) {
+                  matched = true
+                  if (src[i].length != key.length)
+                      return false
+                  for (var j = 0; j < key.length; j++) {
+                      if (src[i][j] != key[j]) {
+                          matched = false;
+                      }
+                  }
+                  if (matched) {
+                      return matched;
+                  }
+              }
+              return matched
+          }
+
+          function calcVxLanId(name) {
+            var hash = 0;
+            if (name.length == 0) return hash;
+            for (var i = 0; i < name.length; i++) {
+              var char = name.charCodeAt(i);
+              hash = ((hash<<5)-hash)+char;
+              hash = hash & hash; // Convert to 32bit integer
+            }
+            return hash & ((2<<20)-1);
+          }
+          
+          async function getEnisAndPortOfTargetGroup(params, allPorts, eniList)
+          {
+              var isError = false;
+              var elbv2 = new aws.ELBv2();
+              var ec2 = new aws.EC2();
+              var i = 0,
+                  j = 0,
+                  k = 0;
+              var targetGroups = await elbv2.describeTargetGroups(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              console.log("elbv2 describeTargetGroups ", JSON.stringify(targetGroups));
+              if (!isError && targetGroups.TargetGroups != undefined) {
+                  for (j = 0; j < targetGroups.TargetGroups.length; j++) {
+                      var counter = sampleSize < 1 ? targetGroups.TargetGroups.length : sampleSize;
+                      var targetGroupName = targetGroups.TargetGroups[j].TargetGroupName || ("TargetGroups-"+j);
+                      isError = false;
+                      params = {
+                          TargetGroupArn: targetGroups.TargetGroups[j].TargetGroupArn
+                      }
+                      var backends = await elbv2.describeTargetHealth(params).promise().catch((err) => {
+                          console.error(err);
+                          isError = true;
+                      });
+                      console.log("elbv2 describeTargetHealth ", JSON.stringify(backends));
+                      if (!isError && backends.TargetHealthDescriptions != undefined) {
+                          if (targetGroups.TargetGroups[j].TargetType == "instance") {
+                              params = {
+                                  Filters: [{
+                                      Name: "attachment.instance-id",
+                                      Values: [
+
+                                      ]
+                                  }]
+                              };
+                              for (k = 0; k < backends.TargetHealthDescriptions.length && counter > 0; k++) {
+                                  params.Filters[0].Values.push(backends.TargetHealthDescriptions[k].Target.Id)
+                                  allPorts.push(backends.TargetHealthDescriptions[k].Target.Port)
+                                  counter -- 
+                              }
+                              if (params.Filters[0].Values.length > 0) {
+                                  var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
+                                      console.error(err);
+                                      isError = true;
+                                  });
+                                  console.log("elbv2 instance params ", JSON.stringify(params));
+                                  console.log("elbv2 instance describeNetworkInterfaces ", JSON.stringify(enis));
+                                  if (!isError && enis.NetworkInterfaces != undefined) {
+                                      for (var l = 0; l < enis.NetworkInterfaces.length; l++) {
+                                          // Use only primary interface
+                                          if (enis.NetworkInterfaces[l].Attachment != undefined && enis.NetworkInterfaces[l].Attachment.DeviceIndex == 0) {
+                                              eniList.push([targetGroupName, enis.NetworkInterfaces[l].NetworkInterfaceId])
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                          if (targetGroups.TargetGroups[j].TargetType == "ip") {
+                              params = {
+                                  Filters: [{
+                                      Name: "addresses.private-ip-address",
+                                      Values: [
+
+                                      ]
+                                  }]
+                              };
+                              for (k = 0; k < backends.TargetHealthDescriptions.length && counter > 0; k++) {
+                                  params.Filters[0].Values.push(backends.TargetHealthDescriptions[k].Target.Id)
+                                  allPorts.push(backends.TargetHealthDescriptions[k].Target.Port)
+                                  counter -- 
+                              }
+                              if (params.Filters[0].Values.length > 0) {
+                                  var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
+                                      console.error(err);
+                                      isError = true;
+                                  });
+                                  console.log("elbv2 ip params ", JSON.stringify(params));
+                                  console.log("elbv2 ip describeNetworkInterfaces ", JSON.stringify(enis));
+                                  if (!isError && enis.NetworkInterfaces != undefined) {
+                                      for (var l = 0; l < enis.NetworkInterfaces.length; l++) {
+                                          eniList.push([targetGroupName, enis.NetworkInterfaces[l].NetworkInterfaceId])
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+
+          }
+
+
+          async function updateTrafficMirroringRule(allPorts) {
+              //console.log("eniList ", JSON.stringify(eniList))
+              var params = {};
+              console.log("params ", JSON.stringify(params))
+              var isError = false;
+              var ec2 = new aws.EC2();
+              var i = 0,
+                  j = 0;
+              params = {
+                  Filters: [{
+                      Name: "traffic-mirror-filter-id",
+                      Values: [
+                          trafficMirrorFilterID
+                      ]
+                  }]
+              }
+              isError = false;
+              var filterList = await ec2.describeTrafficMirrorFilters(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              var uniqueAllPorts = allPorts.filter(filterDuplicates);
+              uniqueAllPorts.sort(function(a, b) {
+                  return a - b;
+              });;
+              var uniqueAllPortsRange = []
+              for (i = 0; i < uniqueAllPorts.length; i++) {
+                  uniqueAllPortsRange.push([uniqueAllPorts[i], uniqueAllPorts[i]])
+              }
+              if (uniqueAllPorts.length > 10) {
+                  // only 10 rules are allowed per filter
+                  console.log("ports are more than 10, grouping them")
+                  var diff = [];
+                  for (i = 1; i < uniqueAllPorts.length; i++) {
+                      diff.push(uniqueAllPorts[i] - uniqueAllPorts[1]);
+                  }
+                  console.log("1. uniqueAllPortsRange ", JSON.stringify(uniqueAllPortsRange))
+                  console.log("1. diff ", JSON.stringify(diff))
+                  for (i = (uniqueAllPortsRange.length - 10); i > 0; i--) {
+                      var minDiff = 65535; // max port number
+                      var minDiffIndex = 0;
+                      for (j = 0; j < diff.length; j++) {
+                          if (minDiff > diff[j]) {
+                              minDiff = diff[j]
+                              minDiffIndex = j;
+                          }
+                      }
+
+                      uniqueAllPortsRange[minDiffIndex][1] = uniqueAllPortsRange[minDiffIndex + 1][1]
+                      uniqueAllPortsRange.splice(minDiffIndex + 1, 1)
+                      diff.splice(minDiffIndex, 1)
+                      console.log("2. uniqueAllPortsRange ", JSON.stringify(uniqueAllPortsRange))
+                      console.log("2. diff ", JSON.stringify(diff))
+                  }
+              }
+              console.log("describe mirror filters ", JSON.stringify(filterList))
+              console.log("uniqueAllPortsRange ", JSON.stringify(uniqueAllPortsRange))
+              var existingUnsedPorts = []
+              var unusedFilterId = []
+              var maxRuleNumber = 1
+              if (!isError && filterList.TrafficMirrorFilters != undefined) {
+                  for (i = 0; i < filterList.TrafficMirrorFilters.length; i++) {
+
+                      for (j = 0; j < filterList.TrafficMirrorFilters[i].IngressFilterRules.length; j++) {
+                          if (maxRuleNumber < filterList.TrafficMirrorFilters[i].IngressFilterRules[j].RuleNumber) {
+                              maxRuleNumber = filterList.TrafficMirrorFilters[i].IngressFilterRules[j].RuleNumber;
+                          }
+                          if (filterList.TrafficMirrorFilters[i].IngressFilterRules[j].DestinationPortRange != undefined) {
+                              let currentFromPort = filterList.TrafficMirrorFilters[i].IngressFilterRules[j].DestinationPortRange.FromPort;
+                              let currentToPort = filterList.TrafficMirrorFilters[i].IngressFilterRules[j].DestinationPortRange.ToPort;
+                              if (existIn2dArray(uniqueAllPortsRange, [currentFromPort, currentToPort])) {
+                                  uniqueAllPortsRange = uniqueAllPortsRange.filter(item => (item[0] != currentFromPort && item[1] != currentToPort))
+                              }
+                              else {
+                                  existingUnsedPorts.push([currentFromPort, currentToPort])
+                                  unusedFilterId.push(filterList.TrafficMirrorFilters[i].IngressFilterRules[j].TrafficMirrorFilterRuleId)
+                              }
+                          }
+
+                      }
+                      for (j = 0; j < filterList.TrafficMirrorFilters[i].EgressFilterRules.length; j++) {
+                          if (maxRuleNumber < filterList.TrafficMirrorFilters[i].EgressFilterRules[j].RuleNumber) {
+                              maxRuleNumber = filterList.TrafficMirrorFilters[i].EgressFilterRules[j].RuleNumber;
+                          }
+                          if (filterList.TrafficMirrorFilters[i].EgressFilterRules[j].SourcePortRange != undefined) {
+                              let currentFromPort = filterList.TrafficMirrorFilters[i].EgressFilterRules[j].SourcePortRange.FromPort;
+                              let currentToPort = filterList.TrafficMirrorFilters[i].EgressFilterRules[j].SourcePortRange.ToPort;
+                              if (existIn2dArray(existingUnsedPorts, [currentFromPort, currentToPort])) {
+                                  unusedFilterId.push(filterList.TrafficMirrorFilters[i].EgressFilterRules[j].TrafficMirrorFilterRuleId)
+                              }
+                          }
+
+                      }
+                  }
+              }
+              console.log("ports to remove from rule ", JSON.stringify(existingUnsedPorts))
+              console.log("ports to add to rule ", JSON.stringify(uniqueAllPortsRange))
+
+              for (i = 0; i < unusedFilterId.length; i++) {
+                  params = {
+                      TrafficMirrorFilterRuleId: unusedFilterId[i]
+                  }
+                  await ec2.deleteTrafficMirrorFilterRule(params).promise().catch((err) => {
+                      console.error("error deleting rule", err);
+                      isError = true;
+                  });
+
+              }
+
+              for (i = 0; i < uniqueAllPortsRange.length; i++) {
+                  ++maxRuleNumber;
+                  params = {
+                      DestinationCidrBlock: '0.0.0.0/0',
+                      RuleAction: 'accept',
+                      RuleNumber: maxRuleNumber,
+                      SourceCidrBlock: '0.0.0.0/0',
+                      TrafficDirection: 'ingress',
+                      TrafficMirrorFilterId: trafficMirrorFilterID,
+                      Description: 'ingress rule for port ' + JSON.stringify(uniqueAllPortsRange[i]),
+                      DestinationPortRange: {
+                          FromPort: uniqueAllPortsRange[i][0],
+                          ToPort: uniqueAllPortsRange[i][1]
+                      },
+                      DryRun: false,
+                      Protocol: 6,
+                  };
+                  await ec2.createTrafficMirrorFilterRule(params).promise().catch((err) => {
+                      console.error("error creating rule", err);
+                      isError = true;
+                  });
+                  params = {
+                      DestinationCidrBlock: '0.0.0.0/0',
+                      RuleAction: 'accept',
+                      RuleNumber: maxRuleNumber,
+                      SourceCidrBlock: '0.0.0.0/0',
+                      TrafficDirection: 'egress',
+                      TrafficMirrorFilterId: trafficMirrorFilterID,
+                      Description: 'egress rule for port ' + JSON.stringify(uniqueAllPortsRange[i]),
+                      SourcePortRange: {
+                          FromPort: uniqueAllPortsRange[i][0],
+                          ToPort: uniqueAllPortsRange[i][1]
+                      },
+                      DryRun: false,
+                      Protocol: 6,
+                  };
+                  await ec2.createTrafficMirrorFilterRule(params).promise().catch((err) => {
+                      console.error("error creating rule", err);
+                      isError = true;
+                  });
+
+              }
+          }
+
+
+          async function updateMirroringSessions(eniList, failedEnis,
+              successEnis) {
+              //get Existing Mirroring session
+              var isError = false;
+              var ec2 = new aws.EC2();
+              var i = 0;
+              var params = {
+                  Filters: [
+                      {
+                          Name: 'session-number',
+                          Values: [ mirrorSessionNumber ]
+                      }
+                  ]
+              }
+              var mirrorSession = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
+                  console.error("error describing traffic mirror sessions", err);
+                  isError = true;
+              });
+              var mirroringSessionToDelete = []
+              if (!isError && mirrorSession.TrafficMirrorSessions != undefined) {
+                  for (i = 0; i < mirrorSession.TrafficMirrorSessions.length; i++) {
+                      if (eniList.includes(mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId)) {
+                          // if mirroring session exist for eni but not with same target and filter
+                          if ( mirrorSession.TrafficMirrorSessions[i].TrafficMirrorTargetId != trafficMirrorTargetID ||
+                               mirrorSession.TrafficMirrorSessions[i].TrafficMirrorFilterId != trafficMirrorFilterID ) {
+                            mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId)
+                          } else {
+                             eniList = eniList.filter(item => item != mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId)
+                          }
+                      }
+                      else {
+                          mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId)
+                      }
+                  }
+              }
+              if (mirroringSessionToDelete.length > 0) {
+                  console.log("Deleting Mirroring sessions: ", JSON.stringify(mirroringSessionToDelete))
+                  params = {
+                      DryRun: false,
+                      Filters: [{
+                              Name: 'traffic-mirror-session-id',
+                              Values: mirroringSessionToDelete
+                          }
+                      ]
+                  }
+                  await deleteTrafficMirrorSessionInternal(params)
+              }
+
+
+              console.log("New mirroring session to create: ", JSON.stringify(eniList))
+              for (i = 0; i < eniList.length; i++) {
+                  await createMirroringSession(eniList[i], mirrorSessionNumber, trafficMirrorFilterID, successEnis, failedEnis)
+              }
+          }
+
+
+
+          async function createTrafficMirrorSessionForTargetGroup(allPorts,
+          eniList) {
+              if (tgNamesArray == undefined || tgNamesArray.length == 0)
+                  return;
+              if (tgNamesArray[0].trim() == "")
+                  return;
+
+              var params = {
+                  Names: tgNamesArray
+              }
+              await getEnisAndPortOfTargetGroup(params, allPorts, eniList)
+          }
+
+
+
+          async function createTrafficMirrorSessionForLBs(allPorts, eniList) {
+              if (elbNamesArray.length == 0)
+                  return;
+              if (elbNamesArray[0].trim() == "")
+                  return;
+
+              var params = {
+                LoadBalancerNames: elbNamesArray
+              };
+              console.log("params ", JSON.stringify(params))
+              var isError = false;
+              var elb = new aws.ELB();
+              var elbv2 = new aws.ELBv2();
+              var ec2 = new aws.EC2();
+              var data = await elb.describeLoadBalancers(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              console.log("describe elb ", JSON.stringify(data));
+              var i = 0,
+                  j = 0,
+                  k = 0;
+              if (!isError && data.LoadBalancerDescriptions != undefined) {
+                  for (i = 0; i < data.LoadBalancerDescriptions.length; i++) {
+                    var loadBalancerName = data.LoadBalancerDescriptions[i].LoadBalancerName;
+                      if (!elbNamesArray.includes(data.LoadBalancerDescriptions[i].LoadBalancerName)) {
+                          continue;
+                      }
+                      for (j = 0; j < data.LoadBalancerDescriptions[i].ListenerDescriptions.length; j++) {
+                          if (data.LoadBalancerDescriptions[i].ListenerDescriptions[j].Listener.InstanceProtocol == "HTTP" ||
+                              data.LoadBalancerDescriptions[i].ListenerDescriptions[j].Listener.InstanceProtocol == "TCP") {
+                              allPorts.push(data.LoadBalancerDescriptions[i].ListenerDescriptions[j].Listener.InstancePort);
+                          }
+                      }
+
+                      params = {
+                          Filters: [{
+                              Name: "attachment.instance-id",
+                              Values: [
+
+                              ]
+                          }]
+                      };
+                      var counter = sampleSize < 1 ? targetGroups.TargetGroups.length : sampleSize
+                      for (j = 0; j < data.LoadBalancerDescriptions[i].Instances.length && counter > 0; j++) {
+                          params.Filters[0].Values[j] = data.LoadBalancerDescriptions[i].Instances[j].InstanceId
+                          counter --
+                      }
+                      console.log("elb eni params", JSON.stringify(params));
+                      if (params.Filters[0].Values.length > 0) {
+                          var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
+                              console.error(err);
+                              isError = true;
+                          });
+                          console.log("elb enis ", JSON.stringify(enis));
+                          if (!isError && enis.NetworkInterfaces != undefined) {
+                              for (var k = 0; k < enis.NetworkInterfaces.length; k++) {
+                                  // Use only primary interface
+                                  if (enis.NetworkInterfaces[k].Attachment != undefined && enis.NetworkInterfaces[k].Attachment.DeviceIndex == 0) {
+                                      eniList.push([loadBalancerName, enis.NetworkInterfaces[k].NetworkInterfaceId])
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+              console.log("elb eniList ", JSON.stringify(eniList));
+
+              // V2 Load balancers
+
+              params = {
+                Names: elbNamesArray
+              };
+              isError = false;
+              data = await elbv2.describeLoadBalancers(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              console.log("elbv2 describeLoadBalancers ", JSON.stringify(data));
+              if (!isError && data.LoadBalancers != undefined) {
+                  for (i = 0; i < data.LoadBalancers.length; i++) {
+                      if (!elbNamesArray.includes(data.LoadBalancers[i].LoadBalancerName)) {
+                          continue;
+                      }
+                      isError = false;
+                      params = {
+                          LoadBalancerArn: data.LoadBalancers[i].LoadBalancerArn
+                      }
+                      await getEnisAndPortOfTargetGroup(params, allPorts, eniList)
+                  }
+              }
+          }
+
+          async function createMirroringSession(eni, sessionNumber, filterId,
+          successEnis, failedEnis) {
+              var params = {
+                  NetworkInterfaceId: eni[1],
+                  SessionNumber: parseInt(sessionNumber),
+                  /* required */
+                  TrafficMirrorFilterId: filterId,
+                  TrafficMirrorTargetId: trafficMirrorTargetID,
+                  VirtualNetworkId: calcVxLanId(eni[0])
+              };
+              console.log("params " + JSON.stringify(params));
+              var ec2 = new aws.EC2();
+              var promise = await ec2.createTrafficMirrorSession(params).promise().catch((err) => {
+                  console.error(err);
+                  failedEnis.push({ eni: eni, message: err.message });
+              });
+              if (promise != undefined) {
+                  // get vpc cidr
+                  var vpcPromise = await ec2.describeVpcs().promise().catch((err1) => {
+                    console.error(err1)
+                  })
+                  let cidrBlock = []
+                  if (vpcPromise !== undefined && vpcPromise["Vpcs"]) {
+                    vpcPromise["Vpcs"].forEach((x) => {
+                      cidrBlock.push(x["CidrBlock"])
+                    })
+                    console.log("cidrBlock: " + cidrBlock)
+                    eni.push(cidrBlock)
+                  }
+                  successEnis.push(eni);
+              }
+              console.log(promise);
+
+          }
+
+          async function deleteTrafficMirrorSessionInternal(params) {
+              var isError = false;
+              var ec2 = new aws.EC2();
+              var data = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              if (!isError) {
+                  console.log(data); // successful response
+                  if (data.TrafficMirrorSessions != undefined) {
+                      for (var i = 0; i < data.TrafficMirrorSessions.length; i++) {
+                          params = {
+                              TrafficMirrorSessionId: data.TrafficMirrorSessions[i].TrafficMirrorSessionId,
+                              DryRun: false
+                          };
+                          console.log(params);
+                          var ec2Tmp = new aws.EC2();
+                          var promise = await ec2Tmp.deleteTrafficMirrorSession(params).promise().catch((err) => { console.error(err); });
+                          console.log(promise);
+                      }
+                  }
+              }
+          }
+
+
+          async function deleteTrafficMirrorSession() {
+              var params = {
+                  DryRun: false,
+                  Filters: [{
+                      Name: 'traffic-mirror-target-id',
+                      Values: [
+                          trafficMirrorTargetID
+                      ]
+                  }]
+              };
+              await deleteTrafficMirrorSessionInternal(params)
+
+          }
+
+          async function initFromCF(event, context) {
+              console.log("event received:\n" + JSON.stringify(event));
+              if (event.RequestType != undefined) {
+                  // coming from cloudformation
+                  if (event.RequestType == "Delete") {
+                      await deleteTrafficMirrorSession();
+                      await response.send(event, context, "SUCCESS");
+                      return;
+                  }
+                  var successEnis = [];
+                  var failedEnis = [];
+                  await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
+
+                  console.log(JSON.stringify(failedEnis))
+                  var responseData = {};
+
+                  successEnis.forEach((x) => {
+                    x[1] = ""
+                  });
+                  let set  = new Set(successEnis.map(JSON.stringify));
+                  successEnis = Array.from(set).map(JSON.parse);
+
+                  failedEnis.forEach((x) => {
+                    x[1] = ""
+                  });
+                  set  = new Set(failedEnis.map(JSON.stringify));
+                  failedEnis = Array.from(set).map(JSON.parse);
+
+                  responseData['successEnis'] = JSON.stringify(successEnis);
+                  responseData['failedEnis'] = JSON.stringify(failedEnis);
+
+                  console.log("starting to invoke lambda")
+
+                  var invokeSaveCollectionNamesLambdaParams = {
+                    FunctionName: saveCollectionNamesLambdaArn,
+                    InvocationType: 'RequestResponse',
+                    LogType: 'Tail' ,
+                    Payload: JSON.stringify(responseData)
+                  }
+                  console.log("starting to invoke lambda with params", invokeSaveCollectionNamesLambdaParams)
+                  var lambda = new aws.Lambda();
+
+                  lambda.invoke(invokeSaveCollectionNamesLambdaParams, function(err, data) {
+                    if (err) console.log("finished invoke lambda err", err, err.stack); 
+                    else     console.log("finished invoke lambda data", data);           
+                  });
+
+                  console.log("finished invoke lambda");
+                  console.log(await wait20());
+                  responseData = {}
+
+                  await response.send(event, context, "SUCCESS", responseData);
+              }
+
+          }
+
+          function wait20(){
+              return new Promise((resolve, reject) => {
+                  setTimeout(() => resolve("hello"), 20000)
+              });
+          }
+
+          async function handlePeriodicEvents(event) {
+              var successEnis = [];
+              var failedEnis = [];
+              await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
+              console.log("Mirroring session created for ", JSON.stringify(successEnis))
+              console.log("failed ENIs ", JSON.stringify(failedEnis))
+          }
+
+          async function
+          createTrafficMirrorSessionForLBsAndTargetGroup(successEnis,
+          failedEnis) {
+              var ports = [];
+              var enis = []
+              await createTrafficMirrorSessionForLBs(ports, enis);
+              await createTrafficMirrorSessionForTargetGroup(ports, enis)
+              await updateTrafficMirroringRule(ports)
+              var uniqueEnis = enis.filter(filterDuplicates);
+              await updateMirroringSessions(uniqueEnis, failedEnis, successEnis)
+          }
+
+
+          exports.handler = async function(event, context) {
+              if (event.RequestType != undefined) {
+                  // coming from cf
+                  await initFromCF(event, context)
+              }
+              else {
+                  // coming from periodic rule
+                  await handlePeriodicEvents(event)
+              }
+          };
+      Description: Auto create mirroring configuration
+      TracingConfig:
+        Mode: Active
+  PeriodicEventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: Generate an event periodically
+      Name: !Join
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-'
+          - PeriodicRule
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt
+            - CreateMirrorSession
+            - Arn
+          Id: !Ref CreateMirrorSession
+  PeriodicEventPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !GetAtt
+        - CreateMirrorSession
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt
+        - PeriodicEventRule
+        - Arn
+  LambdaVPCAccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: LambdaBasicAccessVPCPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:AttachNetworkInterface'
+                Resource: '*'
+  LambdaSecurityGroupVPC:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt 
+        - CustomSourceAktoSetupDetails
+        - VpcId
+      GroupDescription: "Security group is required to create a lambda inside a VPC"
+      
+      SecurityGroupEgress: 
+        - IpProtocol: "tcp"
+          FromPort: 9092
+          ToPort: 9092
+          CidrIp: "0.0.0.0/0"
+      
+
+  SaveCollectionNames:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt
+        - LambdaVPCAccessRole
+        - Arn
+      Handler: nodejs/index.handler
+      VpcConfig:
+        SecurityGroupIds: 
+          - !GetAtt 
+            - LambdaSecurityGroupVPC 
+            - GroupId
+        
+        SubnetIds: !GetAtt 
+          - CustomSourceAktoSetupDetails
+          - SubnetId
+      Environment:
+        Variables:
+          PRIVATE_IP: !GetAtt
+            - CustomSourceAktoSetupDetails
+            - kafkaIp
+          SUCCESS_ENIS: !GetAtt
+            - CustomSourceAktoSetupDetails
+            - successEnis
+      Code:
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: 'templates/mirroring-collections-split.zip'
+      Description: Send collection name to id mapping to Akto modules
+      TracingConfig:
+        Mode: Active    
+  GetVpcDetailsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: DescribeAssetsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeVpcs
+            - ec2:DescribeSubnets
+            Resource: "*"
+  GetVpcDetailsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Look up info from a VPC
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - GetVpcDetailsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID:
+            Ref: SubnetId
+      Code:
+        ZipFile: >
+          var SUBNET_ID = process.env.SUBNET_ID;
+          var aws = require('aws-sdk');
+          var response = require('cfn-response');
+          var ec2 = new aws.EC2();
+          exports.handler = async function(event, context) {
+              if (event.RequestType == 'Delete') {
+                 await response.send(event, context, 'SUCCESS');
+                 return;
+              }
+              var params = {
+                 SubnetIds: [SUBNET_ID] 
+              };
+              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
+                 console.error(err);
+              });
+              var vpcId = subnets['Subnets'][0]['VpcId'];
+              var vpcs = await ec2.describeVpcs({VpcIds: [vpcId]}).promise().catch(err => {
+                 console.error(err);
+              });
+              await response.send(event, context, 'SUCCESS', {CidrBlock: vpcs['Vpcs'][0]['CidrBlock'], VpcId: vpcId})
+          };
+  CustomSourceGetVpcDetails:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - GetVpcDetailsLambda
+        - Arn
+  IamInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: RefreshHandlerLambdaBasicExecutionRole
+  RefreshHandlerLambdaBasicExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambdaPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Resource:
+            - Fn::GetAtt:
+              - DashboardInstanceRefreshHandler
+              - Arn
+            - Fn::GetAtt:
+              - TrafficMirroringInstanceRefreshHandler
+              - Arn
+            Action: lambda:InvokeFunction
+  AktoMongoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Mongo requires (22, 27017)
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 27017
+        ToPort: 27017
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      SecurityGroupEgress: []
+  AktoMongoInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: m5.xlarge
+      ImageId: ami-065efef2c739d613b
+      Tags:
+      - Key: Name
+        Value: Akto Mongo instance
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          VolumeType: gp2
+          DeleteOnTermination: 'true'
+          VolumeSize: '50'
+      KeyName:
+        Ref: KeyPair
+      NetworkInterfaces:
+      - SubnetId:
+          Ref: SubnetId
+        AssociatePublicIpAddress: 'false'
+        DeviceIndex: '0'
+        GroupSet:
+        - Ref: AktoMongoSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash -xe"
+            - touch /tmp/hello.txt
+            - touch ~/hello.txt
+            - sudo yum update -y
+            - sudo yum install -y python python-setuptools
+            - sudo yum install -y docker
+            - sudo dockerd&
+            - sudo mkdir -p /opt/aws/bin
+            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+            - export COMPOSE_FILE=docker-compose-mongo.yml
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto
+            - sudo chmod 700 cf-deploy-akto
+            - "./cf-deploy-akto < <(echo 'test')"
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start
+            - sudo chmod 700 cf-deploy-akto-start
+            - "./cf-deploy-akto-start < <(echo 'test')"
+            - Fn::Join:
+              - ''
+              - - sudo /opt/aws/bin/cfn-signal -s true
+                - "         --stack "
+                - Ref: AWS::StackName
+                - "         --resource AktoMongoInstance"
+                - "         --region "
+                - Ref: AWS::Region
+  AktoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Akto requires (22, 4789, 8000, 9092)
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 9092
+        ToPort: 9092
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: udp
+        FromPort: 4789
+        ToPort: 4789
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 8000
+        ToPort: 8000
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      SecurityGroupEgress: []
+  AktoASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+    - AktoMongoInstance
+    - AktoNLB
+    Properties:
+      ImageId: ami-065efef2c739d613b
+      InstanceType: m5.xlarge
+      KeyName:
+        Ref: KeyPair
+      LaunchConfigurationName: AktoASGLaunchConfiguration
+      AssociatePublicIpAddress: 'false'
+      IamInstanceProfile:
+        Ref: IamInstanceProfile
+      SecurityGroups:
+      - Ref: AktoSecurityGroup
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          VolumeType: gp2
+          DeleteOnTermination: 'true'
+          VolumeSize: '50'
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash -xe"
+            - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+            - Fn::Sub: export AKTO_KAFKA_IP='${AktoNLB.DNSName}'
+            - touch /tmp/hello.txt
+            - touch ~/hello.txt
+            - sudo yum update -y
+            - sudo yum install -y python python-setuptools
+            - sudo yum install -y docker
+            - sudo dockerd&
+            - sudo mkdir -p /opt/aws/bin
+            - export COMPOSE_FILE=docker-compose-runtime.yml
+            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto
+            - sudo chmod 700 cf-deploy-akto
+            - "./cf-deploy-akto < <(echo 'test')"
+            - sudo echo >> ~/akto/infra/docker-runtime.env
+            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
+              ~/akto/infra/docker-runtime.env
+            - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start
+            - sudo chmod 700 cf-deploy-akto-start
+            - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: AktoAutoScalingGroup
+      VPCZoneIdentifier:
+      - Ref: SubnetId
+      LaunchConfigurationName:
+        Ref: AktoASGLaunchConfiguration
+      TargetGroupARNs:
+      - Ref: AktoTrafficMirroringTargetGroup
+      - Ref: AktoKafkaTargetGroup
+      MaxSize: '10'
+      MinSize: '1'
+  AktoDashboardASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+    - AktoMongoInstance
+    - AktoNLB
+    Properties:
+      InstanceType: m5.xlarge
+      ImageId: ami-065efef2c739d613b
+      AssociatePublicIpAddress: 'false'
+      KeyName:
+        Ref: KeyPair
+      IamInstanceProfile:
+        Ref: IamInstanceProfile
+      SecurityGroups:
+      - Ref: AktoDashboardSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash -xe"
+            - touch /tmp/hello.txt
+            - touch ~/hello.txt
+            - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+            - Fn::Sub: export AKTO_KAFKA_BROKER_URL='${AktoNLB.DNSName}'
+            - sudo yum update -y
+            - sudo yum install -y python python-setuptools
+            - sudo yum install -y docker
+            - sudo dockerd&
+            - sudo mkdir -p /opt/aws/bin
+            - export COMPOSE_FILE=docker-compose-dashboard.yml
+            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto' > cf-deploy-akto
+            - sudo chmod 700 cf-deploy-akto
+            - "./cf-deploy-akto < <(echo 'test')"
+            - sudo echo >> ~/akto/infra/docker-dashboard.env
+            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
+              ~/akto/infra/docker-dashboard.env
+            - sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start
+            - sudo chmod 700 cf-deploy-akto-start
+            - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoDashboardAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: AktoDashboardAutoScalingGroup
+      VPCZoneIdentifier:
+      - Ref: SubnetId
+      LaunchConfigurationName:
+        Ref: AktoDashboardASGLaunchConfiguration
+      TargetGroupARNs:
+      - Ref: AktoDashboardTargetGroup2
+      MaxSize: '10'
+      MinSize: '1'
+  AktoTargetTrackingNetworkPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyType: TargetTrackingScaling
+      AutoScalingGroupName:
+        Ref: AktoAutoScalingGroup
+      EstimatedInstanceWarmup: 30
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageNetworkIn
+        TargetValue: 200000000
+  AktoDashboardTargetTrackingNetworkPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyType: TargetTrackingScaling
+      AutoScalingGroupName:
+        Ref: AktoDashboardAutoScalingGroup
+      EstimatedInstanceWarmup: 30
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 60
+  AktoDashboardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Akto requires (22, 8080)
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      SecurityGroupEgress: []
+  AktoNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: network
+      Scheme: internal
+      IpAddressType: ipv4
+      Subnets:
+      - Ref: SubnetId
+      Name: AktoNLB
+      LoadBalancerAttributes:
+      - Key: load_balancing.cross_zone.enabled
+        Value: 'true'
+  AktoLBDashboard:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        Ref: PublicSubnetIds
+      Name: AktoLBDashboard
+  AktoTrafficMirroringTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '4789'
+      Protocol: UDP
+      HealthCheckEnabled: 'true'
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: '8000'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      Targets: []
+      Name: AktoTrafficMirroringTargetGroup
+  AktoTrafficMirroringListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoNLB
+      Port: '4789'
+      Protocol: UDP
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: AktoTrafficMirroringTargetGroup
+  AktoDashboardTargetGroup2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '8080'
+      Protocol: HTTP
+      HealthCheckEnabled: 'true'
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: '8080'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      Targets: []
+      Name: AktoDashboardTargetGroup2
+  AktoDashboardListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoLBDashboard
+      Port: '80'
+      Protocol: HTTP
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: AktoDashboardTargetGroup2
+  AktoKafkaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '9092'
+      Protocol: TCP
+      TargetType: instance
+      HealthCheckEnabled: 'true'
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: '8000'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      Targets: []
+      Name: AktoKafkaTargetGroup
+  AktoKafkaListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoNLB
+      Port: '9092'
+      Protocol: TCP
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: AktoKafkaTargetGroup
+  DashboardInstanceRefreshHandler:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      FunctionName: DashboardInstanceRefreshHandler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - InstanceRefreshHandlerLambdaRole
+        - Arn
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk');
+          var autoscaling = new aws.AutoScaling();
+          exports.handler = function(event, context) {
+            var params = {
+              AutoScalingGroupName: 'AktoDashboardAutoScalingGroup', 
+              Preferences: {
+                InstanceWarmup: 200, 
+                MinHealthyPercentage: 0
+              }
+            };
+            
+            autoscaling.startInstanceRefresh(params, function(err, data) {
+              if(err) { console.log(err) }
+              else { console.log(data) }
+            })
+          };
+  TrafficMirroringInstanceRefreshHandler:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      FunctionName: TrafficMirroringInstanceRefreshHandler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - InstanceRefreshHandlerLambdaRole
+        - Arn
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk');
+          var autoscaling = new aws.AutoScaling();
+          exports.handler = function(event, context) {
+            var params = {
+              AutoScalingGroupName: 'AktoAutoScalingGroup', 
+              Preferences: {
+                InstanceWarmup: 200, 
+                MinHealthyPercentage: 0
+              }
+            };
+            
+            autoscaling.startInstanceRefresh(params, function(err, data) {
+              if(err) { console.log(err) }
+              else { console.log(data) }
+            })
+          };
+  InstanceRefreshHandlerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/service-role/"
+      Policies:
+      - PolicyName: lambdaExecution-DashboardInstanceRefreshHandler
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - autoscaling:StartInstanceRefresh
+            - autoscaling:Describe*
+            - autoscaling:UpdateAutoScalingGroup
+            - ec2:CreateLaunchTemplateVersion
+            - ec2:DescribeLaunchTemplates
+            - ec2:RunInstances
+            Resource: "*"
+Outputs:
+  AktoNLB:
+    Value:
+      Ref: AktoNLB
+    Description: Arn of Akto Network Load Balancer
+  AktoLBDashboard:
+    Value:
+      Ref: AktoLBDashboard
+    Description: Arn of Akto Dashboard LB
