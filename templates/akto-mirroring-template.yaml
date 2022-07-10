@@ -5,80 +5,11 @@ Parameters:
     Description: 'Comma separated list of loadblancer names ( eg: lb1, lb2, lb3 )'
     Type: CommaDelimitedList
     Default: ''
-  SourceTargetGroups:
-    Description: 'Comma separated list of Target Group names ( eg: tg1, tg2, tg3 )'
-    Type: CommaDelimitedList
-    Default: ''
-  SourceECSCluster:
-    Description: 'ECS Cluster name ( eg: cluster1 )'
-    Type: String
-    Default: ''
-  InstancesPerSource:
-    Description: Number of instances to be mirrored per resource group (Load Balancer/Target Group/ECSCluster. (To mirror traffic from all instances, enter any number less than 1. AWS currently limits traffic mirroring to 10 instances. If you want more source instances, please email to support@akto.io.
-    Type: Number
-    Default: 1  
-  TargetENI:
-    Description: ENI id of target interface
-    Type: String
-    Default: ''
   TargetLB:
-    Description: Target Loadbalancer ARN
+    Description: Akto NLB ARN
     Type: String
     Default: ''
-  MirroringSessionNumber:
-    Description: Unique mirroring session number to be used for mirroring session
-    Type: String
-    Default: '1'
-Conditions:
-  CreateMirroringSessionForLBs: !Not
-    - !Equals
-      - !Select
-        - 0
-        - !Ref SourceLBs
-      - ''
-  CreateMirroringSessionForTGs: !Not
-    - !Equals
-      - !Select
-        - 0
-        - !Ref SourceTargetGroups
-      - ''
-  CreateMirroringSessionForECS: !Not
-    - !Equals
-      - !Ref SourceECSCluster
-      - ''
-  CreateMirroringSession: !Or
-    - !Condition CreateMirroringSessionForLBs
-    - !Condition CreateMirroringSessionForTGs
-    - !Condition CreateMirroringSessionForECS
-  CreatePeriodicMirroringSession: !Or
-    - !Condition CreateMirroringSessionForLBs
-    - !Condition CreateMirroringSessionForTGs
-  isTargetNLB: !Not
-    - !Equals
-      - !Ref TargetLB
-      - ''
 Resources:
-  TrafficMirrorTarget:
-    Type: 'AWS::EC2::TrafficMirrorTarget'
-    Properties:
-      Description: Traffic Mirror target set to network interface of Akto EC2 instance
-      Tags:
-        - Key: Name
-          Value: !Join
-            - ''
-            - - !Ref 'AWS::StackName'
-              - '-'
-              - Target
-        - Key: Deployment
-          Value: Akto-CloudFormation
-      NetworkInterfaceId: !If
-        - isTargetNLB
-        - !Ref AWS::NoValue
-        - !Ref TargetENI
-      NetworkLoadBalancerArn: !If
-        - isTargetNLB
-        - !Ref TargetLB
-        - !Ref AWS::NoValue
   LBTrafficMirrorFilter:
     Type: 'AWS::EC2::TrafficMirrorFilter'
     Properties:
@@ -93,56 +24,14 @@ Resources:
               - '-'
               - Filter
         - Key: Deployment
-          Value: Akto-CloudFormation
-  ECSTrafficMirrorFilter:
-    Type: 'AWS::EC2::TrafficMirrorFilter'
-    Condition: CreateMirroringSessionForECS
-    Properties:
-      Description: Traffic mirror filter for ECS cluster
-      NetworkServices:
-        - amazon-dns
-      Tags:
-        - Key: Name
-          Value: !Join
-            - ''
-            - - !Ref 'AWS::StackName'
-              - '-'
-              - ECS-Filter
-        - Key: Deployment
-          Value: Akto-CloudFormation
-  TrafficMirrorFilterRuleIngress:
-    Type: 'AWS::EC2::TrafficMirrorFilterRule'
-    Condition: CreateMirroringSessionForECS
-    Properties:
-      Description: traffic mirror filter rule
-      TrafficMirrorFilterId: !Ref ECSTrafficMirrorFilter
-      TrafficDirection: ingress
-      RuleNumber: 10
-      DestinationCidrBlock: 0.0.0.0/0
-      SourceCidrBlock: 0.0.0.0/0
-      RuleAction: accept
-      Protocol: 6
-  TrafficMirrorFilterRuleEgress:
-    Type: 'AWS::EC2::TrafficMirrorFilterRule'
-    Condition: CreateMirroringSessionForECS
-    Properties:
-      Description: traffic mirror filter rule
-      TrafficMirrorFilterId: !Ref ECSTrafficMirrorFilter
-      TrafficDirection: egress
-      RuleNumber: 10
-      DestinationCidrBlock: 0.0.0.0/0
-      SourceCidrBlock: 0.0.0.0/0
-      RuleAction: accept
-      Protocol: 6
+          Value: Akto-CloudFormation      
   LambdaLogGroup:
     Type: 'AWS::Logs::LogGroup'
-    Condition: CreateMirroringSession
     Properties:
       LogGroupName: !Sub '/aws/lambda/${CreateMirrorSession}'
       RetentionInDays: 7
   LambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
-    Condition: CreateMirroringSession
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -162,15 +51,13 @@ Resources:
                   - 'ec2:DescribeTrafficMirrorSessions'
                   - 'ec2:DescribeInstances'
                   - 'ec2:DescribeVpcs'
-                  - 'ecs:DescribeClusters'
-                  - 'ecs:DescribeTasks'
-                  - 'ecs:ListTasks'
                   - 'elasticloadbalancing:DescribeLoadBalancers'
                   - 'elasticloadbalancing:DescribeTargetGroups'
                   - 'elasticloadbalancing:DescribeTargetHealth'
                   - 'ec2:DescribeTrafficMirrorFilters'
                   - 'ec2:DeleteTrafficMirrorFilterRule'
                   - 'ec2:CreateTrafficMirrorFilterRule'
+                  - 'ec2:DescribeTrafficMirrorTargets'
                   - 'lambda:InvokeFunction'
                 Resource: '*'
               - Effect: Allow
@@ -179,10 +66,7 @@ Resources:
                 Resource:
                   - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
                   - 'arn:aws:ec2:*:*:network-interface/*'
-                  - !Join
-                    - ''
-                    - - 'arn:aws:ec2:*:*:traffic-mirror-target/'
-                      - !Ref TrafficMirrorTarget
+                  - 'arn:aws:ec2:*:*:traffic-mirror-target/*'
                   - !Join
                     - ''
                     - - 'arn:aws:ec2:*:*:traffic-mirror-filter/*'
@@ -193,7 +77,6 @@ Resources:
                   - 'arn:aws:ec2:*:*:traffic-mirror-session/*'
   GetAktoSetupDetailsLambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
-    Condition: CreateMirroringSession
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -213,16 +96,12 @@ Resources:
                   - 'ec2:DescribeTrafficMirrorSessions'
                   - 'ec2:DescribeInstances'
                   - 'ec2:DescribeVpcs'
-                  - 'ecs:DescribeClusters'
-                  - 'ecs:DescribeTasks'
-                  - 'ecs:ListTasks'
                   - 'elasticloadbalancing:DescribeLoadBalancers'
                   - 'elasticloadbalancing:DescribeTargetGroups'
                   - 'elasticloadbalancing:DescribeTargetHealth'
                 Resource: '*'                
   LambdaLogPermissions:
     Type: 'AWS::IAM::Policy'
-    Condition: CreateMirroringSession
     Properties:
       Roles:
         - !Ref LambdaBasicExecutionRole
@@ -243,27 +122,15 @@ Resources:
                 arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${CreateMirrorSession}:*:*
   CustomSourceENIs:
     Type: 'AWS::CloudFormation::CustomResource'
-    Condition: CreateMirroringSession
     Properties:
       ServiceToken: !GetAtt
         - CreateMirrorSession
         - Arn
       SourceLBs: !Ref SourceLBs
-      SourceTGs: !Ref SourceTargetGroups
-      SourceECS: !Ref SourceECSCluster
-      MirrorTarget: !Ref TrafficMirrorTarget
-      MirrorFilter: !Ref LBTrafficMirrorFilter
-      SampleSize: !Ref InstancesPerSource
-      TargetENI: !Ref TargetENI
-      ECSMirrorFilter: !If
-        - CreateMirroringSessionForECS
-        - !Ref ECSTrafficMirrorFilter
-        - ''
     DependsOn: LambdaLogGroup
   
   GetAktoSetupDetails:
     Type: 'AWS::Lambda::Function'
-    Condition: CreateMirroringSession
     Properties:
       Runtime: nodejs12.x
       Timeout: 60
@@ -273,7 +140,6 @@ Resources:
       Handler: index.handler
       Environment:
         Variables:
-          TARGET_ENI: !Ref TargetENI
           TARGET_LB: !Ref TargetLB
       Code:
         ZipFile: >
@@ -281,28 +147,8 @@ Resources:
 
           var response = require('cfn-response')
 
-          var targetENI = process.env.TARGET_ENI;
           var targetLB = process.env.TARGET_LB;
           
-          async function getAktoInstanceDetails() {
-            var ec2 = new aws.EC2();
-            var params = {
-                Filters: [{
-                    Name: "network-interface.network-interface-id",
-                    Values: [
-                      targetENI
-                    ]
-                }]
-            };
-            console.log("GASD ec2 describeInstances ", JSON.stringify(params));
-            var instances = await ec2.describeInstances(params).promise().catch((err) => {
-                console.error(err);
-            });
-            console.log("GASD ec2 describeInstances ", JSON.stringify(instances));
-            return instances.Reservations[0].Instances[0];
-          }
-
-
           async function getAktoLBDetails() {
             var elb = new aws.ELBv2();
               var params = {
@@ -366,42 +212,27 @@ Resources:
             }            
             var responseData = {}
             responseData['successEnis'] = JSON.stringify([]);            
-            if(targetENI.length !=0 )
-            {
-            // when targetEni is given
-                var aktoDetails = await getAktoInstanceDetails();
-                responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                responseData['SubnetId'] = [aktoDetails.SubnetId];
-                responseData['VpcId'] = aktoDetails.VpcId;
 
-            }
-            else 
-            {
-            // when targetLB is given
-                var aktoDetails = await getAktoLBDetails();
-                responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                responseData['SubnetId'] = aktoDetails.Subnets;
-                responseData['VpcId'] = aktoDetails.VpcId;
-            }
+            var aktoDetails = await getAktoLBDetails();
+            responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+            responseData['SubnetId'] = aktoDetails.Subnets;
+            responseData['VpcId'] = aktoDetails.VpcId;
             console.log("GASD responseData", responseData);
             await response.send(event, context, "SUCCESS", responseData);
           };
 
   CustomSourceAktoSetupDetails:
     Type: 'AWS::CloudFormation::CustomResource'
-    Condition: CreateMirroringSession
     Properties:
       ServiceToken: !GetAtt
         - GetAktoSetupDetails
         - Arn
-      TargetENI: !Ref TargetENI
       TargetLB: !Ref TargetLB
   
           
 
   CreateMirrorSession:
     Type: 'AWS::Lambda::Function'
-    Condition: CreateMirroringSession
     Properties:
       Runtime: nodejs12.x
       Timeout: 60
@@ -411,22 +242,10 @@ Resources:
       Handler: index.handler
       Environment:
         Variables:
-          ECS_NAME: !Ref SourceECSCluster
           ELB_NAMES: !Join
             - ','
             - !Ref SourceLBs
-          TARGET_GROUP_NAMES: !Join
-            - ','
-            - !Ref SourceTargetGroups
           TRAFFIC_MIRROR_FILTER_ID: !Ref LBTrafficMirrorFilter
-          TRAFFIC_MIRROR_TARGET_ID: !Ref TrafficMirrorTarget
-          ECS_TRAFFIC_MIRROR_FILTER_ID: !If
-            - CreateMirroringSessionForECS
-            - !Ref ECSTrafficMirrorFilter
-            - ''
-          TRAFFIC_MIRROR_SESSION_NUMBER: !Ref MirroringSessionNumber
-          SAMPLE_SIZE: !Ref InstancesPerSource
-          TARGET_ENI: !Ref TargetENI
           TARGET_LB: !Ref TargetLB
           SAVE_COLLECTION_NAMES_LAMBDA_ARN: !GetAtt
             - SaveCollectionNames
@@ -438,29 +257,42 @@ Resources:
           var response = require('cfn-response')
 
           var saveCollectionNamesLambdaArn = process.env.SAVE_COLLECTION_NAMES_LAMBDA_ARN;
-          var trafficMirrorTargetID = process.env.TRAFFIC_MIRROR_TARGET_ID;
 
           var trafficMirrorFilterID = process.env.TRAFFIC_MIRROR_FILTER_ID;
 
-          var ecsTrafficMirrorFilterID =
-          process.env.ECS_TRAFFIC_MIRROR_FILTER_ID;
+          var mirrorSessionNumber = "1";
 
-          var mirrorSessionNumber = process.env.TRAFFIC_MIRROR_SESSION_NUMBER;
+          var tgNamesArray = process.env.ELB_NAMES.split(",").map(item => item.trim());;
 
-          var tgNamesArray = process.env.TARGET_GROUP_NAMES.split(",").map(item
-          => item.trim());;
+          var elbNamesArray = process.env.ELB_NAMES.split(",").map(item => item.trim());;
 
-          var elbNamesArray = process.env.ELB_NAMES.split(",").map(item =>
-          item.trim());;
-
-          var sourceECS = process.env.ECS_NAME;
-
-          var sampleSize = process.env.SAMPLE_SIZE;
-          var targetENI = process.env.TARGET_ENI;
+          var sampleSize = 200;
           var targetLB = process.env.TARGET_LB;
           function filterDuplicates(value, index, self) {
               return self.indexOf(value) === index;
           }
+
+          async function getAktoTrafficMirrorTargetId() {
+            var params = {
+              Filters: [
+                {
+                  Name: "network-load-balancer-arn",
+                  Values: [targetLB]
+                }
+              ]
+            }
+
+            var ec2 = new aws.EC2();
+
+            var targets = await ec2.describeTrafficMirrorTargets(params).promise().catch(err => {
+              console.log(err);
+            });
+
+            return targets['TrafficMirrorTargets'][0]['TrafficMirrorTargetId']
+
+          }
+
+          var trafficMirrorTargetID = "";
 
 
           function existIn2dArray(src, key) {
@@ -491,25 +323,6 @@ Resources:
             }
             return hash & ((2<<20)-1);
           }
-
-          async function getAktoInstanceDetails() {
-            var ec2 = new aws.EC2();
-            var params = {
-                Filters: [{
-                    Name: "network-interface.network-interface-id",
-                    Values: [
-                      targetENI
-                    ]
-                }]
-            };
-            console.log("ec2 describeInstances ", JSON.stringify(params));
-            var instances = await ec2.describeInstances(params).promise().catch((err) => {
-                console.error(err);
-            });
-            console.log("ec2 describeInstances ", JSON.stringify(instances));
-            return instances.Reservations[0].Instances[0];
-          }
-
 
           async function getAktoLBDetails() {
             var elb = new aws.ELBv2();
@@ -814,8 +627,7 @@ Resources:
           }
 
 
-          async function updateMirroringSessions(eniList, failedEnis,
-              successEnis) {
+          async function updateMirroringSessions(eniList, failedEnis, successEnis, isDelete) {
               //get Existing Mirroring session
               var isError = false;
               var ec2 = new aws.EC2();
@@ -832,36 +644,55 @@ Resources:
                   console.error("error describing traffic mirror sessions", err);
                   isError = true;
               });
+
+              console.log("describeTrafficMirrorSessions: ", JSON.stringify(mirrorSession))
+              console.log("enilist: ", JSON.stringify(eniList))
+
               var mirroringSessionToDelete = []
               if (!isError && mirrorSession.TrafficMirrorSessions != undefined) {
                   for (i = 0; i < mirrorSession.TrafficMirrorSessions.length; i++) {
-                      if (eniList.includes(mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId)) {
+                      console.log("compare session data: ", JSON.stringify(mirrorSession.TrafficMirrorSessions[i]));
+                      var foundSession = eniList.find(item => {return item[1] === mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId});
+                      if (foundSession) {
+                          console.log("comparing more", trafficMirrorTargetID, trafficMirrorFilterID);
                           // if mirroring session exist for eni but not with same target and filter
                           if ( mirrorSession.TrafficMirrorSessions[i].TrafficMirrorTargetId != trafficMirrorTargetID ||
                                mirrorSession.TrafficMirrorSessions[i].TrafficMirrorFilterId != trafficMirrorFilterID ) {
-                            mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId)
+                            console.log("found session of diff mirror/filter");     
+                            mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId);
                           } else {
-                             eniList = eniList.filter(item => item != mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId)
+                            console.log("found session of matching mirror/filter", isDelete);
+                            if (isDelete) {
+                              mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId);
+                            } else {
+                              eniList = eniList.filter(item => item[1] != mirrorSession.TrafficMirrorSessions[i].NetworkInterfaceId);
+                             }
                           }
                       }
                       else {
-                          mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId)
+                          var foundOtherSessionFromSameLB = eniList.find(item => {return calcVxLanId(item[0]) === mirrorSession.TrafficMirrorSessions[i].VirtualNetworkId});
+
+                          if (foundOtherSessionFromSameLB) {
+                            mirroringSessionToDelete.push(mirrorSession.TrafficMirrorSessions[i].TrafficMirrorSessionId);
+                          }
                       }
                   }
               }
+              
+              console.log("Deleting Mirroring sessions: ", JSON.stringify(mirroringSessionToDelete));
               if (mirroringSessionToDelete.length > 0) {
-                  console.log("Deleting Mirroring sessions: ", JSON.stringify(mirroringSessionToDelete))
-                  params = {
-                      DryRun: false,
-                      Filters: [{
-                              Name: 'traffic-mirror-session-id',
-                              Values: mirroringSessionToDelete
-                          }
-                      ]
+                  for(i = 0; i < mirroringSessionToDelete.length; i++) {
+                    var params = {
+                      TrafficMirrorSessionId: mirroringSessionToDelete[i]
+                    }
+                    var deleteSessionResult = await ec2.deleteTrafficMirrorSession(params).promise().catch((err) => { console.error(err); });
+                    console.log(deleteSessionResult);
                   }
-                  await deleteTrafficMirrorSessionInternal(params)
               }
 
+              if (isDelete) {
+                return;
+              }
 
               console.log("New mirroring session to create: ", JSON.stringify(eniList))
               for (i = 0; i < eniList.length; i++) {
@@ -869,6 +700,30 @@ Resources:
               }
           }
 
+
+          async function deleteTrafficMirrorSessionInternal(params) {
+              var isError = false;
+              var ec2 = new aws.EC2();
+              var data = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
+                  console.error(err);
+                  isError = true;
+              });
+              if (!isError) {
+                  console.log(data); // successful response
+                  if (data.TrafficMirrorSessions != undefined) {
+                      for (var i = 0; i < data.TrafficMirrorSessions.length; i++) {
+                          params = {
+                              TrafficMirrorSessionId: data.TrafficMirrorSessions[i].TrafficMirrorSessionId,
+                              DryRun: false
+                          };
+                          console.log(params);
+                          var ec2Tmp = new aws.EC2();
+                          var promise = await ec2Tmp.deleteTrafficMirrorSession(params).promise().catch((err) => { console.error(err); });
+                          console.log(promise);
+                      }
+                  }
+              }
+          }
 
 
           async function createTrafficMirrorSessionForTargetGroup(allPorts,
@@ -979,57 +834,6 @@ Resources:
               }
           }
 
-
-          async function createTrafficMirrorSessionForECS(successEnis,
-              failedEnis) {
-              if (sourceECS === "")
-                  return;
-              var params = {
-                  cluster: sourceECS
-              };
-              var isError = false;
-              var ecs = new aws.ECS();
-              var ec2 = new aws.EC2();
-              //get all tasks in the cluster
-              console.log("params ", JSON.stringify(params));
-              var data = await ecs.listTasks(params).promise().catch((err) => {
-                  console.error(err);
-                  isError = true;
-              });
-              var eniList = []
-              console.log("describe ecs cluster ", JSON.stringify(data))
-              if (!isError) {
-                  //get subArray of 100
-                  for (var taskIndex = 0; taskIndex < data.taskArns.length; taskIndex += 100) {
-                      var subArray = data.taskArns.slice(taskIndex, taskIndex + 100)
-                      params = {
-                          cluster: sourceECS,
-                          tasks: subArray
-                      };
-                      var taskDetails = await ecs.describeTasks(params).promise().catch((err) => {
-                          console.error(err);
-                          isError = true;
-                      });
-                      console.log(JSON.stringify(taskDetails))
-                      var counter = sampleSize < 1 ? taskDetails.tasks.length : sampleSize
-                      for (var taskDetailsIndex = 0; taskDetailsIndex < taskDetails.tasks.length; taskDetailsIndex++) {
-                          if (taskDetails.tasks[taskDetailsIndex].attachments != undefined) {
-                              for (var attachmentIndex = 0; attachmentIndex < taskDetails.tasks[taskDetailsIndex].attachments.length; attachmentIndex++) {
-                                  let eni = taskDetails.tasks[taskDetailsIndex].attachments[attachmentIndex].details.find(o => o.name === 'networkInterfaceId');
-                                  if (eni != undefined && counter > 0) {
-                                      eniList.push([sourceECS, eni.value])
-                                      counter--
-                                  }
-                              }
-                          }
-                      }
-                  }
-                  var uniqueEnis = eniList.filter(filterDuplicates);
-                  await updateMirroringSessions(uniqueEnis, failedEnis, successEnis)
-              }
-          }
-
-
           async function createMirroringSession(eni, sessionNumber, filterId,
           successEnis, failedEnis) {
               var params = {
@@ -1065,80 +869,20 @@ Resources:
 
           }
 
-          async function deleteTrafficMirrorSessionInternal(params) {
-              var isError = false;
-              var ec2 = new aws.EC2();
-              var data = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
-                  console.error(err);
-                  isError = true;
-              });
-              if (!isError) {
-                  console.log(data); // successful response
-                  if (data.TrafficMirrorSessions != undefined) {
-                      for (var i = 0; i < data.TrafficMirrorSessions.length; i++) {
-                          params = {
-                              TrafficMirrorSessionId: data.TrafficMirrorSessions[i].TrafficMirrorSessionId,
-                              DryRun: false
-                          };
-                          console.log(params);
-                          var ec2Tmp = new aws.EC2();
-                          var promise = await ec2Tmp.deleteTrafficMirrorSession(params).promise().catch((err) => { console.error(err); });
-                          console.log(promise);
-                      }
-                  }
-              }
-          }
-
-
-          async function deleteTrafficMirrorSession() {
-              var params = {
-                  DryRun: false,
-                  Filters: [{
-                      Name: 'traffic-mirror-target-id',
-                      Values: [
-                          trafficMirrorTargetID
-                      ]
-                  }]
-              };
-              await deleteTrafficMirrorSessionInternal(params)
-
-          }
-
-
-          async function handleEventForECS(event) {
-              console.log("event recieved:\n" + JSON.stringify(event));
-              var successEnis = [];
-              var failedEnis = [];
-              if (event.detail != undefined && event.detail.attachments != undefined) {
-                  if (event.detail.lastStatus == "RUNNING" && event.detail.desiredStatus == "RUNNING") {
-                      for (var attachmentIndex = 0; attachmentIndex < event.detail.attachments.length; attachmentIndex++) {
-                          let eni = event.detail.attachments[attachmentIndex].details.find(o => o.name === 'networkInterfaceId');
-                          if (eni != undefined) {
-                              await createMirroringSession(eni.value, mirrorSessionNumber, ecsTrafficMirrorFilterID, successEnis, failedEnis)
-                          }
-
-                      }
-                      console.log("Mirroring session created for ", JSON.stringify(successEnis))
-                      console.log("failed ENIs ", JSON.stringify(failedEnis))
-                  }
-
-              }
-          }
-
-
           async function initFromCF(event, context) {
               console.log("event received:\n" + JSON.stringify(event));
               if (event.RequestType != undefined) {
                   // coming from cloudformation
-                  if (event.RequestType == "Delete") {
-                      await deleteTrafficMirrorSession();
-                      await response.send(event, context, "SUCCESS");
-                      return;
-                  }
+                  var isDelete = (event.RequestType == "Delete")
+
                   var successEnis = [];
                   var failedEnis = [];
-                  await createTrafficMirrorSessionForECS(successEnis, failedEnis);
-                  await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
+                  await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis, isDelete)
+
+                  if (isDelete) {
+                    await response.send(event, context, "SUCCESS");
+                    return;
+                  }
 
                   console.log(JSON.stringify(failedEnis))
                   var responseData = {};
@@ -1178,23 +922,11 @@ Resources:
                   console.log(await wait20());
                   responseData = {}
 
-                  if(targetENI.length !=0 )
-                  {
-                  // when targetEni is given
-                      var aktoDetails = await getAktoInstanceDetails();
-                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                      responseData['SubnetId'] = [aktoDetails.SubnetId];
-                      responseData['VpcId'] = aktoDetails.VpcId;
-
-                  }
-                  else 
-                  {
                   // when targetLB is given
-                      var aktoDetails = await getAktoLBDetails();
-                      responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
-                      responseData['SubnetId'] = aktoDetails.Subnets;
-                      responseData['VpcId'] = aktoDetails.VpcId;
-                  }
+                  var aktoDetails = await getAktoLBDetails();
+                  responseData['kafkaIp'] = aktoDetails.PrivateIpAddress;
+                  responseData['SubnetId'] = aktoDetails.Subnets;
+                  responseData['VpcId'] = aktoDetails.VpcId;
 
                   await response.send(event, context, "SUCCESS", responseData);
               }
@@ -1212,34 +944,32 @@ Resources:
           async function handlePeriodicEvents(event) {
               var successEnis = [];
               var failedEnis = [];
-              await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
+              await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis, false)
               console.log("Mirroring session created for ", JSON.stringify(successEnis))
               console.log("failed ENIs ", JSON.stringify(failedEnis))
           }
 
 
-          async function
-          createTrafficMirrorSessionForLBsAndTargetGroup(successEnis,
-          failedEnis) {
+          async function createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis, isDelete) {
               var ports = [];
               var enis = []
               await createTrafficMirrorSessionForLBs(ports, enis);
               await createTrafficMirrorSessionForTargetGroup(ports, enis)
-              await updateTrafficMirroringRule(ports)
+
+              if (!isDelete) {
+                await updateTrafficMirroringRule(ports)
+              }
               var uniqueEnis = enis.filter(filterDuplicates);
-              await updateMirroringSessions(uniqueEnis, failedEnis, successEnis)
+              await updateMirroringSessions(uniqueEnis, failedEnis, successEnis, isDelete)
           }
 
 
           exports.handler = async function(event, context) {
+              trafficMirrorTargetID = await getAktoTrafficMirrorTargetId();
               if (event.RequestType != undefined) {
                   // coming from cf
                   await initFromCF(event, context)
-              }
-              else if (event.detail != undefined && event.detail.attachments != undefined) {
-                  await handleEventForECS(event)
-              }
-              else {
+              } else {
                   // coming from periodic rule
                   await handlePeriodicEvents(event)
               }
@@ -1249,7 +979,6 @@ Resources:
         Mode: Active
   PeriodicEventRule:
     Type: 'AWS::Events::Rule'
-    Condition: CreatePeriodicMirroringSession
     Properties:
       Description: Generate an event periodically
       Name: !Join
@@ -1257,42 +986,7 @@ Resources:
         - - !Ref 'AWS::StackName'
           - '-'
           - PeriodicRule
-      ScheduleExpression: rate(15 minutes)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt
-            - CreateMirrorSession
-            - Arn
-          Id: !Ref CreateMirrorSession
-  ECSEventsRule:
-    Type: 'AWS::Events::Rule'
-    Condition: CreateMirroringSessionForECS
-    Properties:
-      Description: Generate an event for ECS task state change
-      Name: !Join
-        - ''
-        - - !Ref 'AWS::StackName'
-          - '-'
-          - ECSEventRule
-      EventPattern:
-        source:
-          - aws.ecs
-        detail-type:
-          - ECS Task State Change
-        detail:
-          clusterArn:
-            - !Join
-              - ''
-              - - 'arn:aws:ecs:'
-                - !Ref 'AWS::Region'
-                - ':'
-                - !Ref 'AWS::AccountId'
-                - ':cluster/'
-                - !Ref SourceECSCluster
-          desiredStatus:
-            - RUNNING
-          lastStatus:
-            - RUNNING
+      ScheduleExpression: rate(5 minutes)
       State: ENABLED
       Targets:
         - Arn: !GetAtt
@@ -1301,7 +995,6 @@ Resources:
           Id: !Ref CreateMirrorSession
   PeriodicEventPermission:
     Type: 'AWS::Lambda::Permission'
-    Condition: CreatePeriodicMirroringSession
     Properties:
       FunctionName: !GetAtt
         - CreateMirrorSession
@@ -1312,23 +1005,9 @@ Resources:
       SourceArn: !GetAtt
         - PeriodicEventRule
         - Arn
-  ECSEventPermission:
-    Type: 'AWS::Lambda::Permission'
-    Condition: CreateMirroringSessionForECS
-    Properties:
-      FunctionName: !GetAtt
-        - CreateMirrorSession
-        - Arn
-      Action: 'lambda:InvokeFunction'
-      Principal: events.amazonaws.com
-      SourceAccount: !Ref 'AWS::AccountId'
-      SourceArn: !GetAtt
-        - ECSEventsRule
-        - Arn
 
   LambdaVPCAccessRole:
     Type: 'AWS::IAM::Role'
-    Condition: CreateMirroringSession
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -1367,7 +1046,6 @@ Resources:
 
   SaveCollectionNames:
     Type: 'AWS::Lambda::Function'
-    Condition: CreateMirroringSession
     Properties:
       Runtime: nodejs12.x
       Timeout: 60
