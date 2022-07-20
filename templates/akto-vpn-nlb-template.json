@@ -1,6 +1,76 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "This template does a simple setup for all Akto modules. It sets up all modules on a single instance. If you want a scalable and flexible setup, please contact support@akto.io.",
+    "Mappings": {
+        "RegionMap": {
+            "af-south-1": {
+                "AMI": "ami-0adee70ff4394e3d5"
+            },
+            "eu-north-1": {
+                "AMI": "ami-04e8b0e36ed3403dc"
+            },
+            "ap-south-1": {
+                "AMI": "ami-09de362f44ba0a166"
+            },
+            "eu-west-3": {
+                "AMI": "ami-0614433a16ab15878"
+            },
+            "eu-west-2": {
+                "AMI": "ami-030770b178fa9d374"
+            },
+            "eu-south-1": {
+                "AMI": "ami-0432f14b68c3e0273"
+            },
+            "eu-west-1": {
+                "AMI": "ami-0bba0a4cb75835f71"
+            },
+            "ap-northeast-3": {
+                "AMI": "ami-0253beba286f3e848"
+            },
+            "ap-northeast-2": {
+                "AMI": "ami-0e1d09d8b7c751816"
+            },
+            "me-south-1": {
+                "AMI": "ami-07a68e42e669daed0"
+            },
+            "ap-northeast-1": {
+                "AMI": "ami-06ce6680729711877"
+            },
+            "sa-east-1": {
+                "AMI": "ami-0656df2cc0dfd150a"
+            },
+            "ca-central-1": {
+                "AMI": "ami-04c12937e87474def"
+            },
+            "ap-east-1": {
+                "AMI": "ami-0b751f901b93720a5"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-0adf622550366ea53"
+            },
+            "ap-southeast-2": {
+                "AMI": "ami-03b836d87d294e89e"
+            },
+            "eu-central-1": {
+                "AMI": "ami-094c442a8e9a67935"
+            },
+            "ap-southeast-3": {
+                "AMI": "ami-0483d92a8124da6c9"
+            },
+            "us-east-1": {
+                "AMI": "ami-065efef2c739d613b"
+            },
+            "us-east-2": {
+                "AMI": "ami-07251f912d2a831a3"
+            },
+            "us-west-1": {
+                "AMI": "ami-09b2f6d85764ec71b"
+            },
+            "us-west-2": {
+                "AMI": "ami-0d08ef957f0e4722b"
+            }
+        }
+    },
     "Parameters": {
         "SubnetId": {
             "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
@@ -180,7 +250,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "InstanceType": "m5.xlarge",
-                "ImageId": "ami-065efef2c739d613b",
+                "ImageId":{ "Fn::FindInMap" : [ "RegionMap", {"Ref": "AWS::Region"}, "AMI"] },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -288,7 +358,7 @@
             "Type": "AWS::AutoScaling::LaunchConfiguration",
             "DependsOn": ["AktoMongoInstance", "AktoNLB"],
             "Properties": {
-                "ImageId": "ami-065efef2c739d613b",
+                "ImageId":{ "Fn::FindInMap" : [ "RegionMap", {"Ref": "AWS::Region"}, "AMI"] },
                 "InstanceType": "m5.xlarge",
                 "KeyName": {
                     "Ref": "KeyPair"
@@ -351,7 +421,7 @@
             "DependsOn": ["AktoMongoInstance", "AktoNLB"],
             "Properties": {
                 "InstanceType": "m5.xlarge",
-                "ImageId": "ami-065efef2c739d613b",
+                "ImageId":{ "Fn::FindInMap" : [ "RegionMap", {"Ref": "AWS::Region"}, "AMI"] },
                 "AssociatePublicIpAddress": "false",
                 "KeyName": {
                     "Ref": "KeyPair"
