@@ -1,0 +1,7 @@
+version: '3.3'
+
+services:
+  akto-api-security-testing:
+    image: aktosecurity/akto-api-testing:latest
+    env_file: ./docker-testing.env
+    restart: always

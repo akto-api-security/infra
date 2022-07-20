@@ -1,0 +1,245 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template setups addons necessary for api testing. If you want a scalable and flexible setup, please contact support@akto.io.",
+    "Parameters": {
+        "VPC": {
+            "Description": "The VPC where Akto will run",
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        "VpcCIDR": {
+            "Description": "Please enter the IP range (CIDR notation) for this VPC",
+            "Type": "String",
+            "Default": "0.0.0.0/0"
+        },    
+        "KeyPair": {
+            "Description": "Select the key pair to connect to Akto EC2 instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SubnetId": {
+            "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
+            "Type": "AWS::EC2::Subnet::Id",
+            "ConstraintDescription": "must be an existing subnet"
+        },        
+        "AktoInstanceType": {
+            "Description": "Instance type to be allocated to Akto",
+            "ConstraintDescription": "Must be a valid EC2 instance type. Preferably, choose Intel series (M5 or C6I)",
+            "Type": "String",
+            "Default": "m5.xlarge"
+        },
+        "AktoMongoIp": {
+            "Description": "Mongo private IP",
+            "ConstraintDescription": "Must be a valid IP",
+            "Type": "String",
+            "Default": null
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Designer": {
+            "01a51caa-b901-42f9-bd49-62222c5367a1": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -133.5,
+                    "y": -25
+                },
+                "z": 0,
+                "embeds": []
+            },
+            "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -3.5,
+                    "y": -9.666666666666666
+                },
+                "z": 0,
+                "embeds": [],
+                "isassociatedwith": [
+                    "01a51caa-b901-42f9-bd49-62222c5367a1"
+                ]
+            }
+        }
+    },
+    "Resources": {
+        "AktoSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "GroupDescription": "Enable the ports Akto requires (9092)",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 9092,
+                        "ToPort": 9092,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "01a51caa-b901-42f9-bd49-62222c5367a1"
+                }
+            }
+        },
+        "AktoContextAnalyzerInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Akto Context Analyzer instance"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "50"
+                        }
+                    }
+                ],
+                "NetworkInterfaces": [
+                    {
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
+                    }
+                ],        
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    { "Fn::Sub": "export AKTO_MONGO_CONN='$AktoMongoIp'" },
+                    "export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)",
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "export COMPOSE_FILE=docker-compose-context-analyzer.yml",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/testing_addon/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    "./cf-deploy-akto < <(echo 'test')",
+                    "sudo echo >> ~/akto/infra/docker-context-analyzer.env",
+                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-context-analyzer.env",
+                    "sudo echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >> ~/akto/infra/docker-context-analyzer.env",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/testing_addon/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')"
+                    
+                    ]]
+                }}
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                }
+            }
+        },
+
+        "AktoTestingInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "AktoInstanceType"
+                },
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Akto Testing Instance"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": "50"
+                        }
+                    }
+                ],
+                "NetworkInterfaces": [
+                    {
+                        "SubnetId": {"Ref": "SubnetId"},
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
+                    }
+                ],        
+                "UserData": { "Fn::Base64": { "Fn::Join": ["\n", [
+                    "#!/bin/bash -xe",
+                    { "Fn::Sub": "export AKTO_MONGO_CONN='$AktoMongoIp'" },
+                    "touch /tmp/hello.txt",
+                    "touch ~/hello.txt",
+                    "sudo yum update -y",
+                    "sudo yum install -y python python-setuptools",
+                    "sudo yum install -y docker",
+                    "sudo dockerd&",
+                    "sudo mkdir -p /opt/aws/bin",
+                    "export COMPOSE_FILE=docker-compose-context-analyzer.yml",
+                    "sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
+                    "sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/testing_addon/cf-deploy-akto' > cf-deploy-akto",
+                    "sudo chmod 700 cf-deploy-akto",
+                    "./cf-deploy-akto < <(echo 'test')",
+                    "sudo echo >> ~/akto/infra/docker-testing.env",
+                    "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-testing.env",
+                    "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/testing_addon/cf-deploy-akto-start' > cf-deploy-akto-start",
+                    "sudo chmod 700 cf-deploy-akto-start",
+                    "./cf-deploy-akto-start < <(echo 'test')"
+                    
+                    ]]
+                }}
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c3cbe581-37f1-40cb-a4fa-ab8c7f318cd0"
+                }
+            }
+        }
+    },
+    "Outputs": {
+
+    }    
+}
+

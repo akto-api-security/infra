@@ -114,7 +114,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   # NB: this is to make onprem containers to all get named the same.
   cd infra
   if ! command_present unzip; then
-    git checkout feature/segregation
+    git checkout feature/testing_addon
   fi
   DOCKER_CONTEXT="$(pwd)"
 
