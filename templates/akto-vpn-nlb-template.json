@@ -443,7 +443,14 @@
                 "LaunchConfigurationName": {"Ref": "AktoASGLaunchConfiguration"},
                 "TargetGroupARNs": [{"Ref": "AktoTrafficMirroringTargetGroup"}, {"Ref": "AktoKafkaTargetGroup"}],
                 "MaxSize": "10",
-                "MinSize": "1"   
+                "MinSize": "1",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "PropagateAtLaunch": true,
+                        "Value": "Akto Runtime Instance"
+                    }
+                ]
             }
         },
         "AktoDashboardASGLaunchConfiguration": {
@@ -502,7 +509,14 @@
                 "LaunchConfigurationName": {"Ref": "AktoDashboardASGLaunchConfiguration"},
                 "TargetGroupARNs": [{"Ref": "AktoDashboardTargetGroup2"}],
                 "MaxSize": "10",
-                "MinSize": "1"   
+                "MinSize": "1",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "PropagateAtLaunch": true,
+                        "Value": "Akto Dashboard Instance"
+                    }
+                ]
             }
         },
         "AktoTargetTrackingNetworkPolicy": {

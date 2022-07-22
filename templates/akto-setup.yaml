@@ -1344,6 +1344,10 @@ Resources:
       - Ref: AktoKafkaTargetGroup
       MaxSize: '10'
       MinSize: '1'
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: true
+        Value: Akto Runtime Instance
   AktoDashboardASGLaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     DependsOn:
@@ -1398,6 +1402,10 @@ Resources:
       - Ref: AktoDashboardTargetGroup2
       MaxSize: '10'
       MinSize: '1'
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: true
+        Value: Akto Dashboard Instance
   AktoTargetTrackingNetworkPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
