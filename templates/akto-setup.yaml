@@ -1159,7 +1159,7 @@ Resources:
           - Effect: Allow
             Resource: 
             - !Sub >-
-              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:akto-*:*  
+              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:akto-*:*
             Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
