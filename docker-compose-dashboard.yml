@@ -7,3 +7,10 @@ services:
     restart: always
     ports: 
       - "8080:8080"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: "akto-dashboard"
+        awslogs-stream: "akto-dashboard"
+        awslogs-create-group: "true"

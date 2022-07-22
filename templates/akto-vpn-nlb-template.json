@@ -210,6 +210,19 @@
                             {"Fn::GetAtt": ["TrafficMirroringInstanceRefreshHandler","Arn"]}
                         ],
                         "Action": "lambda:InvokeFunction"
+                      },
+                      {
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:DescribeLogGroups",
+                            "logs:DescribeLogStreams",
+                            "logs:PutLogEvents",
+                            "logs:GetLogEvents",
+                            "logs:FilterLogEvents"
+                        ],
+                        "Effect": "Allow",
+                        "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:akto-*:*"}
                       }
                     ]
                   }
@@ -412,6 +425,7 @@
                     "./cf-deploy-akto < <(echo 'test')",
                     "sudo echo >> ~/akto/infra/docker-runtime.env",
                     "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-runtime.env",
+                    { "Fn::Sub": "sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-runtime.env" },
                     "sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
                     "sudo chmod 700 cf-deploy-akto-start",
@@ -472,6 +486,7 @@
                     "sudo echo >> ~/akto/infra/docker-dashboard.env",
                     "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env",
                     "sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env",
+                    { "Fn::Sub": "sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env" },
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation/cf-deploy-akto-start' > cf-deploy-akto-start",
                     "sudo chmod 700 cf-deploy-akto-start",
                     "./cf-deploy-akto-start < <(echo 'test')"
