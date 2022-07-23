@@ -105,16 +105,16 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/segregation.zip
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/testing_modules.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-feature-segregation infra
+    mv infra-feature-testing_modules infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
   cd infra
   if ! command_present unzip; then
-    git checkout feature/segregation
+    git checkout feature/testing_modules
   fi
   DOCKER_CONTEXT="$(pwd)"
 
