@@ -117,6 +117,8 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     git checkout feature/testing_modules
   fi
   DOCKER_CONTEXT="$(pwd)"
+ export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+ echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >> .env
 
   log_step 'setting environment variables'
   read -p "Enter your license key: " licenseKey
