@@ -118,7 +118,14 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   fi
   DOCKER_CONTEXT="$(pwd)"
  export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+ echo  >> .env
  echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >> .env
+
+ echo  >> docker-dashboard.env
+ echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >> docker-dashboard.env
+
+ echo  >> docker-runtime.env
+ echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >> docker-runtime.env
 
   log_step 'setting environment variables'
   read -p "Enter your license key: " licenseKey

@@ -56,3 +56,15 @@ services:
       - ./data-kafka-secrets:/etc/kafka/secrets
     depends_on:
       - zoo1
+
+  akto-api-security-context-analyzer:
+    image: aktosecurity/akto-api-context-analyzer:latest
+    env_file: ./docker-dashboard.env
+    depends_on:
+      - kafka1
+    restart: always
+
+  akto-api-security-testing:
+    image: aktosecurity/akto-api-testing:local
+    env_file: ./docker-dashboard.env
+    restart: always
