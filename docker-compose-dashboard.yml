@@ -7,3 +7,8 @@ services:
     restart: always
     ports: 
       - "8080:8080"
+
+  akto-api-security-testing:
+    image: aktosecurity/akto-api-testing:latest
+    env_file: ./docker-dashboard.env
+    restart: always
