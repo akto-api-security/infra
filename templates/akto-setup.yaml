@@ -105,6 +105,21 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${CreateMirrorSession}'
       RetentionInDays: 7
+  AktoDashboardLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: akto-dashboard
+      RetentionInDays: 7
+  AktoRuntimeLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: akto-runtime
+      RetentionInDays: 7
+  AktoTestingLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: akto-testing
+      RetentionInDays: 7
   LambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
