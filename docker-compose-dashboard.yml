@@ -14,3 +14,16 @@ services:
         awslogs-group: "akto-dashboard"
         awslogs-stream: "akto-dashboard"
         awslogs-create-group: "true"
+  
+  akto-api-security-testing:
+    image: aktosecurity/akto-api-testing:latest
+    env_file: ./docker-dashboard.env
+    restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: "akto-testing"
+        awslogs-stream: "akto-testing"
+        awslogs-create-group: "true"
+
