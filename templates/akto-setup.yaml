@@ -354,8 +354,7 @@ Resources:
 
           var mirrorSessionNumber = "1";
 
-          var tgNamesArray = process.env.ELB_NAMES.split(",").map(item
-          => item.trim());;
+          var tgNamesArray = process.env.ELB_NAMES.split(",").map(item => item.trim());;
 
           var elbNamesArray = process.env.ELB_NAMES.split(",").map(item =>
           item.trim());;
@@ -879,6 +878,45 @@ Resources:
 
           }
 
+          function createResponseData(successEnis, failedEnis) {
+            var responseData = {};
+
+            successEnis.forEach((x) => {
+              x[1] = ""
+            });
+            let set  = new Set(successEnis.map(JSON.stringify));
+            successEnis = Array.from(set).map(JSON.parse);
+
+            failedEnis.forEach((x) => {
+              x[1] = ""
+            });
+            set  = new Set(failedEnis.map(JSON.stringify));
+            failedEnis = Array.from(set).map(JSON.parse);
+
+            responseData['successEnis'] = JSON.stringify(successEnis);
+            responseData['failedEnis'] = JSON.stringify(failedEnis);
+            return responseData;           
+          }
+
+          async function invokeSaveCollectionNamesLambda(responseData) {
+            console.log("starting to invoke lambda")
+
+            var invokeSaveCollectionNamesLambdaParams = {
+              FunctionName: saveCollectionNamesLambdaArn,
+              InvocationType: 'RequestResponse',
+              LogType: 'Tail' ,
+              Payload: JSON.stringify(responseData)
+            }
+            console.log("starting to invoke lambda with params", invokeSaveCollectionNamesLambdaParams)
+            var lambda = new aws.Lambda();
+
+            await lambda.invoke(invokeSaveCollectionNamesLambdaParams).promise().catch(err => {
+              console.log("finished invoke lambda err", err);
+            });
+
+            console.log("finished invoke lambda");
+          }
+
           async function initFromCF(event, context) {
               console.log("event received:\n" + JSON.stringify(event));
               if (event.RequestType != undefined) {
@@ -891,54 +929,10 @@ Resources:
                   var successEnis = [];
                   var failedEnis = [];
                   await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
-
                   console.log(JSON.stringify(failedEnis))
-                  var responseData = {};
-
-                  successEnis.forEach((x) => {
-                    x[1] = ""
-                  });
-                  let set  = new Set(successEnis.map(JSON.stringify));
-                  successEnis = Array.from(set).map(JSON.parse);
-
-                  failedEnis.forEach((x) => {
-                    x[1] = ""
-                  });
-                  set  = new Set(failedEnis.map(JSON.stringify));
-                  failedEnis = Array.from(set).map(JSON.parse);
-
-                  responseData['successEnis'] = JSON.stringify(successEnis);
-                  responseData['failedEnis'] = JSON.stringify(failedEnis);
-
-                  console.log("starting to invoke lambda")
-
-                  var invokeSaveCollectionNamesLambdaParams = {
-                    FunctionName: saveCollectionNamesLambdaArn,
-                    InvocationType: 'RequestResponse',
-                    LogType: 'Tail' ,
-                    Payload: JSON.stringify(responseData)
-                  }
-                  console.log("starting to invoke lambda with params", invokeSaveCollectionNamesLambdaParams)
-                  var lambda = new aws.Lambda();
-
-                  lambda.invoke(invokeSaveCollectionNamesLambdaParams, function(err, data) {
-                    if (err) console.log("finished invoke lambda err", err, err.stack); 
-                    else     console.log("finished invoke lambda data", data);           
-                  });
-
-                  console.log("finished invoke lambda");
-                  console.log(await wait20());
-                  responseData = {}
-
-                  await response.send(event, context, "SUCCESS", responseData);
+                  await response.send(event, context, "SUCCESS", {});
               }
 
-          }
-
-          function wait20(){
-              return new Promise((resolve, reject) => {
-                  setTimeout(() => resolve("hello"), 20000)
-              });
           }
 
           async function handlePeriodicEvents(event) {
@@ -959,6 +953,8 @@ Resources:
               await updateTrafficMirroringRule(ports)
               var uniqueEnis = enis.filter(filterDuplicates);
               await updateMirroringSessions(uniqueEnis, failedEnis, successEnis)
+              await invokeSaveCollectionNamesLambda(createResponseData(successEnis, failedEnis));
+
           }
 
 
