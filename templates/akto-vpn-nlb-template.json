@@ -471,7 +471,6 @@
                     "./cf-deploy-akto < <(echo 'test')",
                     "sudo echo >> ~/akto/infra/docker-dashboard.env",
                     "sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env",
-                    "sudo echo AKTO_KAFKA_BROKER_URL=$AKTO_KAFKA_BROKER_URL:9092 >> ~/akto/infra/docker-dashboard.env",
                     "curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start",
                     "sudo chmod 700 cf-deploy-akto-start",
                     "./cf-deploy-akto-start < <(echo 'test')"
