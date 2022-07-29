@@ -7,6 +7,8 @@ services:
     restart: always
     ports: 
       - "8080:8080"
+    depends_on:
+      - kafka1
 
   akto-api-security-testing:
     image: aktosecurity/akto-api-testing:latest
@@ -66,6 +68,5 @@ services:
     image: aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker-dashboard.env
     restart: always
-    mem_limit: 4g
     depends_on:
       - kafka1
