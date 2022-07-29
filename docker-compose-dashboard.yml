@@ -2,7 +2,7 @@ version: '3.3'
 
 services:
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:latest
+    image: aktosecurity/akto-api-security-dashboard:avneesh
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -16,7 +16,7 @@ services:
         awslogs-create-group: "true"
   
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:latest
+    image: aktosecurity/akto-api-testing:avneesh
     env_file: ./docker-dashboard.env
     restart: always
     logging:
@@ -50,7 +50,7 @@ services:
       - "29092:29092"
       - "9999:9999"
     environment:
-      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_EXTERNAL_DIFFHOST://${AKTO_KAFKA_IP}:9092, LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_EXTERNAL_DIFFHOST://${AKTO_INSTANCE_IP}:9092, LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_EXTERNAL_DIFFHOST:PLAINTEXT, LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_LOCALHOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
       KAFKA_ZOOKEEPER_CONNECT: "zoo1:2181"
@@ -69,7 +69,21 @@ services:
       - zoo1
 
   akto-api-security-runtime:
-    image: aktosecurity/akto-api-security-runtime:latest
+    image: aktosecurity/akto-api-security-runtime:avneesh
+    env_file: ./docker-dashboard.env
+    restart: always
+    depends_on:
+      - kafka1
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: "akto-runtime"
+        awslogs-stream: "akto-runtime"
+        awslogs-create-group: "true"
+
+  akto-api-security-context-analyzer:
+    image: aktosecurity/akto-api-context-analyzer:avneesh
     env_file: ./docker-dashboard.env
     restart: always
     depends_on:

@@ -105,18 +105,24 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/unify_setup.zip
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/analyser_addon.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-feature-unify_setup infra
+    mv infra-feature-analyser_addon infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
   cd infra
   if ! command_present unzip; then
-    git checkout feature/unify_setup
+    git checkout feature/analyser_addon
   fi
   DOCKER_CONTEXT="$(pwd)"
+
+ export AKTO_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+ echo AKTO_INSTANCE_IP=$AKTO_INSTANCE_IP >> .env
+ echo AKTO_INSTANCE_IP=$AKTO_INSTANCE_IP >> docker.env
+ echo AKTO_INSTANCE_IP=$AKTO_INSTANCE_IP >> docker-dashboard.env
+ echo AKTO_INSTANCE_IP=$AKTO_INSTANCE_IP >> docker-runtime.env
 
   log_step 'setting environment variables'
   read -p "Enter your license key: " licenseKey
