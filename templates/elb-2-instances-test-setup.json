@@ -34,12 +34,12 @@
       }
     },
 
-    "ALBListener" : {
+    "ALBListenerGoServerHTTPS" : {
       "Type" : "AWS::ElasticLoadBalancingV2::Listener",
       "Properties" : {
         "DefaultActions" : [{
           "Type" : "forward",
-          "TargetGroupArn" : { "Ref" : "ALBTargetGroup" }
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroupGoServer" }
         }],
         "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
         "Port" : 443,
@@ -50,8 +50,32 @@
         "SslPolicy": "ELBSecurityPolicy-TLS-1-2-Ext-2018-06"
       }
     },
+    "ALBListenerGoServerHTTP" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties" : {
+        "DefaultActions" : [{
+          "Type" : "forward",
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroupGoServer" }
+        }],
+        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
+        "Port" : 8000,
+        "Protocol" : "HTTP"
+      }
+    },
+    "ALBListenerJuiceShopHTTP" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties" : {
+        "DefaultActions" : [{
+          "Type" : "forward",
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroupJuiceShop" }
+        }],
+        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
+        "Port" : 80,
+        "Protocol" : "HTTP"
+      }
+    },
 
-    "ALBTargetGroup" : {
+    "ALBTargetGroupGoServer" : {
       "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties" : {
         "HealthCheckIntervalSeconds" : 5,
@@ -68,6 +92,25 @@
         "Targets" : [ 
             { "Id" : { "Ref" : "EC2Instance1"}, "Port" : 8000 },
             { "Id" : { "Ref" : "EC2Instance2"}, "Port" : 8000 }
+        ]
+      }
+    },
+    "ALBTargetGroupJuiceShop" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties" : {
+        "HealthCheckIntervalSeconds" : 5,
+        "HealthCheckTimeoutSeconds" : 2,
+        "HealthyThresholdCount" : 2,
+        "HealthCheckPath": "/api/books",
+        "Port" : 80,
+        "Protocol" : "HTTP",
+        "Matcher": {
+          "HttpCode": "200-299"
+        },
+        "UnhealthyThresholdCount" : 2,
+        "VpcId" : {"Ref" : "VpcId"},
+        "Targets" : [ 
+            { "Id" : { "Ref" : "EC2Instance2"}, "Port" : 80 }
         ]
       }
     },
@@ -110,6 +153,12 @@
              "yum update -y aws-cfn-bootstrap\n",
 
              "yum install -y git\n",
+             "yum install -y docker\n",
+             "service docker start\n",
+             "docker pull bkimminich/juice-shop\n",
+             "docker run -d -p 80:3000 bkimminich/juice-shop\n",
+
+             "yum install -y git\n",
              "git clone https://github.com/avneesh99/gorestapi.git\n",
              "cd gorestapi\n",
              "nohup ./restapi &\n",
@@ -138,6 +187,12 @@
         },
         {
           "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "CidrIp" : "0.0.0.0/0"
+        },
+        {
+          "IpProtocol" : "tcp",
           "FromPort" : "8000",
           "ToPort" : "8000",
           "CidrIp" : "0.0.0.0/0"
@@ -148,21 +203,39 @@
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "GroupDescription" : "Enable HTTPs access on the inbound port",
-        "SecurityGroupIngress" : [ {
-          "IpProtocol" : "tcp",
-          "FromPort" : "443",
-          "ToPort" : "443",
-          "CidrIp" : "0.0.0.0/0"
-        }
+        "SecurityGroupIngress" : 
+        [ 
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "443",
+            "ToPort" : "443",
+            "CidrIp" : "0.0.0.0/0"
+          }, 
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "8000",
+            "ToPort" : "8000",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "80",
+            "ToPort" : "80",
+            "CidrIp" : "0.0.0.0/0"
+          }          
        ]
       }
     }
   },
 
   "Outputs" : {
-    "URL" : {
-      "Description" : "URL of the sample website",
+    "BooksURL" : {
+      "Description" : "URL of the books website",
       "Value" :  { "Fn::Join" : [ "", [ "https://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}, "/api/books" ] ]}
+    },
+    "JuiceShopURL" : {
+      "Description" : "URL of the juice shop website",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}, ":80" ] ]}
     },
     "LBName": {
       "Description": "Name of the Load Balancer",
