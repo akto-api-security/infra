@@ -5,7 +5,7 @@ Resources:
     Properties:
       TemplateURL: https://cf-templates-3jie41lht0xk-us-east-1.s3.amazonaws.com/templates/elb-2-instances-test-setup.json
       Parameters: 
-        Vpc: vpc-004dbe2e7c81a2256
+        VpcId: vpc-004dbe2e7c81a2256
         Subnets: "subnet-0d3ff2356d5470899,subnet-0490a611ebc996a73,subnet-0858236377f3d70fd"
 Outputs:
   BooksURL:

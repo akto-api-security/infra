@@ -1,14 +1,17 @@
 AWSTemplateFormatVersion: 2010-09-09
 Parameters:
-  SourceLBs:
-    Description: 'LB name'
-    Type: String
-    Default: ''
   DockerTag: 
     Description: 'Tag of docker image'
     Type: String
     Default: 'latest'
 Resources:
+  TestServersStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: https://cf-templates-3jie41lht0xk-us-east-1.s3.amazonaws.com/templates/elb-2-instances-test-setup.json
+      Parameters: 
+        VpcId: vpc-004dbe2e7c81a2256
+        Subnets: "subnet-0d3ff2356d5470899,subnet-0490a611ebc996a73,subnet-0858236377f3d70fd"
   AktoStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
@@ -17,7 +20,10 @@ Resources:
         SubnetId: subnet-0d61a1c5e5b46e609
         PublicSubnetIds: "subnet-0d3ff2356d5470899,subnet-0490a611ebc996a73"
         KeyPair: temp1
-        SourceLBs: !Ref SourceLBs
+        SourceLBs: 
+          Fn::GetAtt:
+            - TestServersStack
+            - Outputs.LBName
         DockerTag: !Ref DockerTag
 
 Outputs:
@@ -39,3 +45,21 @@ Outputs:
         - AktoStack
         - Outputs.AktoDashboardUrl
     Description: Akto Dashboard Url
+  BooksURL:
+    Value: 
+      Fn::GetAtt:
+        - TestServersStack
+        - Outputs.BooksURL
+    Description: Url of api/books endpoint
+  JuiceShopURL:
+    Value: 
+      Fn::GetAtt:
+        - TestServersStack
+        - Outputs.JuiceShopURL
+    Description: Url of OWASP Juice Shop
+  LBName:
+    Value: 
+      Fn::GetAtt:
+        - TestServersStack
+        - Outputs.LBName
+    Description: Test server load balancer name
