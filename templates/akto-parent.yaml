@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  SourceLBs:
+    Description: 'LB name'
+    Type: String
+    Default: ''
+  DockerTag: 
+    Description: 'Tag of docker image'
+    Type: String
+    Default: 'latest'
+Resources:
+  AktoStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: https://cf-templates-3jie41lht0xk-us-east-1.s3.amazonaws.com/templates/akto-setup.yaml
+      Parameters: 
+        SubnetId: subnet-0d61a1c5e5b46e609
+        PublicSubnetIds: "subnet-0d3ff2356d5470899,subnet-0490a611ebc996a73"
+        KeyPair: temp1
+        SourceLBs: !Ref SourceLBs
+        DockerTag: !Ref DockerTag
+
+Outputs:
+  AktoNLB:
+    Value: 
+      Fn::GetAtt:
+        - AktoStack
+        - Outputs.AktoNLB
+    Description: Arn of Akto Network Load Balancer
+  AktoLBDashboard:
+    Value: 
+      Fn::GetAtt:
+        - AktoStack
+        - Outputs.AktoLBDashboard
+    Description: Arn of Akto Dashboard Load Balancer
+  AktoDashboardUrl:
+    Value: 
+      Fn::GetAtt:
+        - AktoStack
+        - Outputs.AktoDashboardUrl
+    Description: Akto Dashboard Url
