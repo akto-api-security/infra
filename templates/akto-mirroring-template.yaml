@@ -9,6 +9,10 @@ Parameters:
     Description: Akto NLB ARN
     Type: String
     Default: ''
+  AktoAccountId:
+    Description: Akto account id where to send the mirrored data
+    Type: String
+    Default: ''
 Resources:
   LBTrafficMirrorFilter:
     Type: 'AWS::EC2::TrafficMirrorFilter'
@@ -247,6 +251,7 @@ Resources:
             - !Ref SourceLBs
           TRAFFIC_MIRROR_FILTER_ID: !Ref LBTrafficMirrorFilter
           TARGET_LB: !Ref TargetLB
+          AKTO_ACCOUNT_ID: !Ref AktoAccountId
           SAVE_COLLECTION_NAMES_LAMBDA_ARN: !GetAtt
             - SaveCollectionNames
             - Arn
@@ -261,6 +266,8 @@ Resources:
           var trafficMirrorFilterID = process.env.TRAFFIC_MIRROR_FILTER_ID;
 
           var mirrorSessionNumber = "1";
+
+          var aktoAccountId = process.env.AKTO_ACCOUNT_ID;
 
           var tgNamesArray = process.env.ELB_NAMES.split(",").map(item => item.trim());;
 
@@ -897,7 +904,7 @@ Resources:
 
                   responseData['successEnis'] = JSON.stringify(successEnis);
                   responseData['failedEnis'] = JSON.stringify(failedEnis);
-
+                  responseData['accountId'] = aktoAccountId;
                   console.log("starting to invoke lambda")
 
                   var invokeSaveCollectionNamesLambdaParams = {
