@@ -50,7 +50,7 @@ services:
     depends_on:
       - zoo1
 
-  akto-api-security-runtime:
+  akto-api-security-context-analyser:
     image: aktosecurity/akto-api-context-analyser:${DOCKER_TAG}
     env_file: ./docker-context-analyser.env
     mem_limit: 4g    
