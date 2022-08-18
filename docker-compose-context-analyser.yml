@@ -51,7 +51,7 @@ services:
       - zoo1
 
   akto-api-security-context-analyser:
-    image: aktosecurity/akto-api-context-analyzer:avneesh
+    image: aktosecurity/akto-api-context-analyzer:local
     env_file: ./docker-context-analyser.env
     mem_limit: 4g    
     restart: always
