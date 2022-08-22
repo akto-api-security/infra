@@ -1,0 +1,273 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This template does a simple setup for all Akto Context Analyzer. It sets up Context Analyzer
+  module on a single instance.
+Parameters:
+  SubnetId:
+    Description: Select the same subnet as selected in Akto Dashboard CloudFormation stack setup.  
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: must be an existing subnet
+  KeyPair:
+    Description: Select the key pair to connect to Akto Context Analyzer EC2 instance. Preferably, use the same key pair as used in Akto Dashboard CloudFormation stack setup.
+    Type: AWS::EC2::KeyPair::KeyName
+  AktoMongoInstanceIP:
+    Description: Provide the private ip for Akto Mongo Instance. You can find this in the EC2 > Instances. Search for "Akto Mongo Instance".
+    Type: String
+    ConstraintDescription: must be an existing Akto Mongo instance IP.
+Mappings:
+  RegionMap:
+    'af-south-1':
+      AMI: 'ami-0adee70ff4394e3d5'
+    'eu-north-1':
+      AMI: 'ami-04e8b0e36ed3403dc'
+    'ap-south-1':
+      AMI: 'ami-09de362f44ba0a166'
+    'eu-west-3':
+      AMI: 'ami-0614433a16ab15878'
+    'eu-west-2':
+      AMI: 'ami-030770b178fa9d374'
+    'eu-south-1':
+      AMI: 'ami-0432f14b68c3e0273'
+    'eu-west-1':
+      AMI: 'ami-0bba0a4cb75835f71'
+    'ap-northeast-3':
+      AMI: 'ami-0253beba286f3e848'
+    'ap-northeast-2':
+      AMI: 'ami-0e1d09d8b7c751816'
+    'me-south-1':
+      AMI: 'ami-07a68e42e669daed0'
+    'ap-northeast-1':
+      AMI: 'ami-06ce6680729711877'
+    'sa-east-1':
+      AMI: 'ami-0656df2cc0dfd150a'
+    'ca-central-1':
+      AMI: 'ami-04c12937e87474def'
+    'ap-east-1':
+      AMI: 'ami-0b751f901b93720a5'
+    'ap-southeast-1':
+      AMI: 'ami-0adf622550366ea53'
+    'ap-southeast-2':
+      AMI: 'ami-03b836d87d294e89e'
+    'eu-central-1':
+      AMI: 'ami-094c442a8e9a67935'
+    'ap-southeast-3':
+      AMI: 'ami-0483d92a8124da6c9'
+    'us-east-1':
+      AMI: 'ami-065efef2c739d613b'
+    'us-east-2':
+      AMI: 'ami-07251f912d2a831a3'
+    'us-west-1':
+      AMI: 'ami-09b2f6d85764ec71b'
+    'us-west-2':
+      AMI: 'ami-0d08ef957f0e4722b'
+Resources:  
+  GetVpcDetailsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: DescribeAssetsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeVpcs
+            - ec2:DescribeSubnets
+            Resource: "*"
+  GetVpcDetailsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Look up info from a VPC
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - GetVpcDetailsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID:
+            Ref: SubnetId
+      Code:
+        ZipFile: >
+          var SUBNET_ID = process.env.SUBNET_ID;
+          var aws = require('aws-sdk');
+          var response = require('cfn-response');
+          var ec2 = new aws.EC2();
+          exports.handler = async function(event, context) {
+              if (event.RequestType == 'Delete') {
+                 await response.send(event, context, 'SUCCESS');
+                 return;
+              }
+              var params = {
+                 SubnetIds: [SUBNET_ID] 
+              };
+              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
+                 console.error(err);
+              });
+              var vpcId = subnets['Subnets'][0]['VpcId'];
+              var vpcs = await ec2.describeVpcs({VpcIds: [vpcId]}).promise().catch(err => {
+                 console.error(err);
+              });
+              await response.send(event, context, 'SUCCESS', {CidrBlock: vpcs['Vpcs'][0]['CidrBlock'], VpcId: vpcId})
+          };
+  CustomSourceGetVpcDetails:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - GetVpcDetailsLambda
+        - Arn
+  AktoContextAnalyzerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Akto requires (22, 9092)
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 9092
+        ToPort: 9092
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      SecurityGroupEgress: []
+  AktoContextAnalyzerASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: m5.xlarge
+      KeyName:
+        Ref: KeyPair
+      LaunchConfigurationName: AktoContextAnalyzerASGLaunchConfiguration
+      AssociatePublicIpAddress: 'false'
+      SecurityGroups:
+      - Ref: AktoContextAnalyzerSecurityGroup
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          VolumeType: gp2
+          DeleteOnTermination: 'true'
+          VolumeSize: '50'
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash -xe"
+            - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstanceIP}'
+            - touch /tmp/hello.txt
+            - touch ~/hello.txt
+            - sudo yum update -y
+            - sudo yum install -y python python-setuptools
+            - sudo yum install -y docker
+            - sudo dockerd&
+            - sudo mkdir -p /opt/aws/bin
+            - export COMPOSE_FILE=docker-compose-context-analyser.yml
+            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+            - sudo chmod 700 cf-deploy-akto
+            - "./cf-deploy-akto < <(echo 'test')"
+            - sudo echo >> ~/akto/infra/docker-context-analyser.env
+            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-context-analyser.env
+            - export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+            - echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >>  ~/akto/infra/docker-context-analyser.env            
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+            - sudo chmod 700 cf-deploy-akto-start
+            - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoContextAnalyzerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: AktoContextAnalyzerAutoScalingGroup
+      VPCZoneIdentifier:
+      - Ref: SubnetId
+      LaunchConfigurationName:
+        Ref: AktoContextAnalyzerASGLaunchConfiguration
+      MaxSize: '1'
+      MinSize: '1'
+  AktoContextAnalyzerInstanceRefreshHandler:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      FunctionName: AktoContextAnalyzerInstanceRefreshHandler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - InstanceRefreshHandlerLambdaRole
+        - Arn
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk');
+          var autoscaling = new aws.AutoScaling();
+          exports.handler = function(event, context) {
+            var params = {
+              AutoScalingGroupName: 'AktoContextAnalyzerAutoScalingGroup', 
+              Preferences: {
+                InstanceWarmup: 200, 
+                MinHealthyPercentage: 0
+              }
+            };
+            
+            autoscaling.startInstanceRefresh(params, function(err, data) {
+              if(err) { console.log(err) }
+              else { console.log(data) }
+            })
+          };
+  InstanceRefreshHandlerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/service-role/"
+      Policies:
+      - PolicyName: lambdaExecution-DashboardInstanceRefreshHandler
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - autoscaling:StartInstanceRefresh
+            - autoscaling:Describe*
+            - autoscaling:UpdateAutoScalingGroup
+            - ec2:CreateLaunchTemplateVersion
+            - ec2:DescribeLaunchTemplates
+            - ec2:RunInstances
+            Resource: "*"        

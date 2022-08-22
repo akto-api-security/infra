@@ -1136,13 +1136,119 @@ Resources:
       ServiceToken:
         Fn::GetAtt:
         - GetVpcDetailsLambda
-        - Arn
+        - Arn  
   IamInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: "/"
       Roles:
       - Ref: RefreshHandlerLambdaBasicExecutionRole
+  AktoContextAnalyzerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Akto requires (22, 9092)
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      - IpProtocol: tcp
+        FromPort: 9092
+        ToPort: 9092
+        CidrIp:
+          Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - CidrBlock
+      SecurityGroupEgress: []      
+  AktoContextAnalyzerASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: m5.xlarge
+      KeyName:
+        Ref: KeyPair
+      LaunchConfigurationName: AktoContextAnalyzerASGLaunchConfiguration
+      AssociatePublicIpAddress: 'false'
+      SecurityGroups:
+      - Ref: AktoContextAnalyzerSecurityGroup
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          VolumeType: gp2
+          DeleteOnTermination: 'true'
+          VolumeSize: '50'
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - "\n"
+          - - "#!/bin/bash -xe"
+            - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+            - touch /tmp/hello.txt
+            - touch ~/hello.txt
+            - sudo yum update -y
+            - sudo yum install -y python python-setuptools
+            - sudo yum install -y docker
+            - sudo dockerd&
+            - sudo mkdir -p /opt/aws/bin
+            - export COMPOSE_FILE=docker-compose-context-analyser.yml
+            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+            - sudo chmod 700 cf-deploy-akto
+            - "./cf-deploy-akto < <(echo 'test')"
+            - sudo echo >> ~/akto/infra/docker-context-analyser.env
+            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-context-analyser.env
+            - export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+            - echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >>  ~/akto/infra/docker-context-analyser.env            
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+            - sudo chmod 700 cf-deploy-akto-start
+            - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoContextAnalyzerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: AktoContextAnalyzerAutoScalingGroup
+      VPCZoneIdentifier:
+      - Ref: SubnetId
+      LaunchConfigurationName:
+        Ref: AktoContextAnalyzerASGLaunchConfiguration
+      MaxSize: '1'
+      MinSize: '1'
+  AktoContextAnalyzerInstanceRefreshHandler:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      FunctionName: AktoContextAnalyzerInstanceRefreshHandler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - InstanceRefreshHandlerLambdaRole
+        - Arn
+      Code:
+        ZipFile: >
+          var aws = require('aws-sdk');
+          var autoscaling = new aws.AutoScaling();
+          exports.handler = function(event, context) {
+            var params = {
+              AutoScalingGroupName: 'AktoContextAnalyzerAutoScalingGroup', 
+              Preferences: {
+                InstanceWarmup: 200, 
+                MinHealthyPercentage: 0
+              }
+            };
+            
+            autoscaling.startInstanceRefresh(params, function(err, data) {
+              if(err) { console.log(err) }
+              else { console.log(data) }
+            })
+          };      
   RefreshHandlerLambdaBasicExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1165,6 +1271,9 @@ Resources:
               - Arn
             - Fn::GetAtt:
               - TrafficMirroringInstanceRefreshHandler
+              - Arn
+            - Fn::GetAtt:
+              - AktoContextAnalyzerInstanceRefreshHandler
               - Arn
             Action: lambda:InvokeFunction
           - Effect: Allow
@@ -1241,10 +1350,10 @@ Resources:
             - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
             - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
             - export COMPOSE_FILE=docker-compose-mongo.yml
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto' > cf-deploy-akto
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
             - sudo chmod 700 cf-deploy-akto
             - "./cf-deploy-akto < <(echo 'test')"
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto-start' > cf-deploy-akto-start
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
             - "./cf-deploy-akto-start < <(echo 'test')"
             - Fn::Join:
@@ -1332,14 +1441,14 @@ Resources:
             - export COMPOSE_FILE=docker-compose-runtime.yml
             - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
             - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto' > cf-deploy-akto
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
             - sudo chmod 700 cf-deploy-akto
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-runtime.env
             - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-runtime.env
             - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-runtime.env
             - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto-start' > cf-deploy-akto-start
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
             - "./cf-deploy-akto-start < <(echo 'test')"
   AktoAutoScalingGroup:
@@ -1391,13 +1500,13 @@ Resources:
             - export COMPOSE_FILE=docker-compose-dashboard.yml
             - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
             - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto' > cf-deploy-akto
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
             - sudo chmod 700 cf-deploy-akto
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-dashboard.env
             - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env
             - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/unify_setup/cf-deploy-akto-start' > cf-deploy-akto-start
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
             - "./cf-deploy-akto-start < <(echo 'test')"
   AktoDashboardAutoScalingGroup:
