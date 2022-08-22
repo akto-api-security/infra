@@ -115,6 +115,11 @@ Resources:
     Properties:
       LogGroupName: akto-runtime
       RetentionInDays: 7
+  AktoContextAnalyzerLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: akto-context-analyser
+      RetentionInDays: 7
   AktoTestingLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
@@ -1205,6 +1210,7 @@ Resources:
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-context-analyser.env
             - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-context-analyser.env
+            - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env            
             - export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
             - echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >>  ~/akto/infra/docker-context-analyser.env            
             - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start

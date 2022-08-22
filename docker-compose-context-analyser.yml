@@ -55,6 +55,13 @@ services:
     env_file: ./docker-context-analyser.env
     mem_limit: 4g    
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: "akto-context-analyser"
+        awslogs-stream: "akto-context-analyser"
+        awslogs-create-group: "true"
     depends_on:
       - kafka1
 
