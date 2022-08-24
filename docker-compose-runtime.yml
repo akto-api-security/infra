@@ -53,7 +53,7 @@ services:
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:${DOCKER_TAG}
     env_file: ./docker-runtime.env
-    mem_limit: 4g    
+    mem_limit: 8g    
     restart: always
     depends_on:
       - kafka1
