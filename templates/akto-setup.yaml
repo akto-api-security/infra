@@ -337,7 +337,7 @@ Resources:
 
           var trafficMirrorFilterID = process.env.TRAFFIC_MIRROR_FILTER_ID;
 
-          var mirrorSessionNumber = 1;
+          var mirrorSessionNumber = "1";
 
           var tgNamesArray = process.env.ELB_NAMES.split(",").map(item
           => item.trim());;
