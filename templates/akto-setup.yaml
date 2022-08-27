@@ -1173,6 +1173,9 @@ Resources:
           VolumeType: gp2
           DeleteOnTermination: 'true'
           VolumeSize: '50'
+          Encrypted: true
+      MetadataOptions:
+        HttpTokens: required    
       UserData:
         Fn::Base64:
           Fn::Join:
@@ -1194,7 +1197,11 @@ Resources:
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-context-analyser.env
             - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-context-analyser.env
-            - export AKTO_CURRENT_INSTANCE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+            - "export TOKEN=$(curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 600')"
+            - Fn::Join: 
+              - ":"
+              - - export AKTO_CURRENT_INSTANCE_IP=$(curl -H "X-aws-ec2-metadata-token
+                - $TOKEN" -v http://169.254.169.254/latest/meta-data/local-ipv4)
             - echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >>  ~/akto/infra/docker-context-analyser.env            
             - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
@@ -1289,58 +1296,66 @@ Resources:
           - CustomSourceGetVpcDetails
           - CidrBlock
       SecurityGroupEgress: []
+  AktoMongoLaunchTemplate:    
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: m5.xlarge
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref SubnetId
+            AssociatePublicIpAddress: 'false'
+            DeviceIndex: 0
+            Groups: [!Ref AktoMongoSecurityGroup]
+        BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: 'true'
+            VolumeSize: '50'
+            Encrypted: true
+        MetadataOptions:
+          HttpTokens: required    
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+            - "\n"
+            - - "#!/bin/bash -xe"
+              - touch /tmp/hello.txt
+              - touch ~/hello.txt
+              - sudo yum update -y
+              - sudo yum install -y python python-setuptools
+              - sudo yum install -y docker
+              - sudo dockerd&
+              - sudo mkdir -p /opt/aws/bin
+              - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+              - export COMPOSE_FILE=docker-compose-mongo.yml
+              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+              - sudo chmod 700 cf-deploy-akto
+              - "./cf-deploy-akto < <(echo 'test')"
+              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+              - sudo chmod 700 cf-deploy-akto-start
+              - "./cf-deploy-akto-start < <(echo 'test')"
+              - Fn::Join:
+                - ''
+                - - sudo /opt/aws/bin/cfn-signal -s true
+                  - "         --stack "
+                  - Ref: AWS::StackName
+                  - "         --resource AktoMongoInstance"
+                  - "         --region "
+                  - Ref: AWS::Region
   AktoMongoInstance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: m5.xlarge
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       Tags:
       - Key: Name
         Value: Akto Mongo instance
-      BlockDeviceMappings:
-      - DeviceName: "/dev/xvda"
-        Ebs:
-          VolumeType: gp2
-          DeleteOnTermination: 'true'
-          VolumeSize: '50'
-      KeyName:
-        Ref: KeyPair
-      NetworkInterfaces:
-      - SubnetId:
-          Ref: SubnetId
-        AssociatePublicIpAddress: 'false'
-        DeviceIndex: '0'
-        GroupSet:
-        - Ref: AktoMongoSecurityGroup
-      UserData:
-        Fn::Base64:
-          Fn::Join:
-          - "\n"
-          - - "#!/bin/bash -xe"
-            - touch /tmp/hello.txt
-            - touch ~/hello.txt
-            - sudo yum update -y
-            - sudo yum install -y python python-setuptools
-            - sudo yum install -y docker
-            - sudo dockerd&
-            - sudo mkdir -p /opt/aws/bin
-            - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-            - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-            - export COMPOSE_FILE=docker-compose-mongo.yml
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
-            - sudo chmod 700 cf-deploy-akto
-            - "./cf-deploy-akto < <(echo 'test')"
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
-            - sudo chmod 700 cf-deploy-akto-start
-            - "./cf-deploy-akto-start < <(echo 'test')"
-            - Fn::Join:
-              - ''
-              - - sudo /opt/aws/bin/cfn-signal -s true
-                - "         --stack "
-                - Ref: AWS::StackName
-                - "         --resource AktoMongoInstance"
-                - "         --region "
-                - Ref: AWS::Region
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoMongoLaunchTemplate
+        Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
   AktoSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -1401,6 +1416,9 @@ Resources:
           VolumeType: gp2
           DeleteOnTermination: 'true'
           VolumeSize: '50'
+          Encrypted: true
+      MetadataOptions:
+        HttpTokens: required    
       UserData:
         Fn::Base64:
           Fn::Join:
@@ -1456,6 +1474,15 @@ Resources:
         Ref: IamInstanceProfile
       SecurityGroups:
       - Ref: AktoDashboardSecurityGroup
+      MetadataOptions:
+        HttpTokens: required    
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          VolumeType: gp2
+          DeleteOnTermination: 'true'
+          VolumeSize: '20'
+          Encrypted: true
       UserData:
         Fn::Base64:
           Fn::Join:
