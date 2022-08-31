@@ -932,6 +932,28 @@ Resources:
               await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
               console.log("Mirroring session created for ", JSON.stringify(successEnis))
               console.log("failed ENIs ", JSON.stringify(failedEnis))
+              var responseData = {};
+              responseData['successEnis'] = JSON.stringify(successEnis);
+              responseData['failedEnis'] = JSON.stringify(failedEnis);
+
+              console.log("starting to invoke lambda")
+
+              var invokeSaveCollectionNamesLambdaParams = {
+                FunctionName: saveCollectionNamesLambdaArn,
+                InvocationType: 'RequestResponse',
+                LogType: 'Tail' ,
+                Payload: JSON.stringify(responseData)
+              }
+              console.log("starting to invoke lambda with params", invokeSaveCollectionNamesLambdaParams)
+              var lambda = new aws.Lambda();
+
+              lambda.invoke(invokeSaveCollectionNamesLambdaParams, function(err, data) {
+                if (err) console.log("finished invoke lambda err", err, err.stack); 
+                else     console.log("finished invoke lambda data", data);           
+              });
+
+              console.log("finished invoke lambda");
+              console.log(await wait20());
           }
 
           async function
