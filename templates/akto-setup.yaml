@@ -1187,6 +1187,7 @@ Resources:
           - "\n"
           - - "#!/bin/bash -xe"
             - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+            - Fn::Sub: export DOCKER_TAG='${DockerTag}'            
             - touch /tmp/hello.txt
             - touch ~/hello.txt
             - sudo yum update -y
@@ -1197,7 +1198,7 @@ Resources:
             - export COMPOSE_FILE=docker-compose-context-analyser.yml
             - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
             - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/internal_setup/cf-deploy-akto' > cf-deploy-akto
             - sudo chmod 700 cf-deploy-akto
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-context-analyser.env
@@ -1208,7 +1209,7 @@ Resources:
               - - export AKTO_CURRENT_INSTANCE_IP=$(curl -H "X-aws-ec2-metadata-token
                 - $TOKEN" -v http://169.254.169.254/latest/meta-data/local-ipv4)
             - echo AKTO_CURRENT_INSTANCE_IP=$AKTO_CURRENT_INSTANCE_IP >>  ~/akto/infra/docker-context-analyser.env            
-            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+            - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/internal_setup/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
             - "./cf-deploy-akto-start < <(echo 'test')"
   AktoContextAnalyzerAutoScalingGroup:
