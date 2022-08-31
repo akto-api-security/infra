@@ -931,7 +931,7 @@ Resources:
               var failedEnis = [];
               await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
               console.log("Mirroring session created for ", JSON.stringify(successEnis))
-              console.log("failed ENIs ", JSON.stringify(failedEnis))
+              console.log("failed ENIs ", JSON.stringify(failedEnis));
               var responseData = {};
               responseData['successEnis'] = JSON.stringify(successEnis);
               responseData['failedEnis'] = JSON.stringify(failedEnis);
