@@ -936,11 +936,13 @@ Resources:
               var failedEnis = [];
               await createTrafficMirrorSessionForLBsAndTargetGroup(successEnis, failedEnis)
               console.log("Mirroring session created for ", JSON.stringify(successEnis))
-              console.log("failed ENIs ", JSON.stringify(failedEnis))
+              console.log("failed ENIs ", JSON.stringify(failedEnis));
               var responseData = {};
               responseData['successEnis'] = JSON.stringify(successEnis);
               responseData['failedEnis'] = JSON.stringify(failedEnis);
-              
+
+              console.log("starting to invoke lambda")
+
               var invokeSaveCollectionNamesLambdaParams = {
                 FunctionName: saveCollectionNamesLambdaArn,
                 InvocationType: 'RequestResponse',
@@ -1200,7 +1202,7 @@ Resources:
           VolumeSize: '50'
           Encrypted: true
       MetadataOptions:
-        HttpTokens: required    
+        HttpTokens: required   
       UserData:
         Fn::Base64:
           Fn::Join:
@@ -1503,6 +1505,7 @@ Resources:
       - Ref: AktoDashboardSecurityGroup
       MetadataOptions:
         HttpTokens: required    
+        HttpPutResponseHopLimit: 2       
       BlockDeviceMappings:
       - DeviceName: "/dev/xvda"
         Ebs:
@@ -1532,8 +1535,9 @@ Resources:
             - sudo chmod 700 cf-deploy-akto
             - "./cf-deploy-akto < <(echo 'test')"
             - sudo echo >> ~/akto/infra/docker-dashboard.env
-            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
-              ~/akto/infra/docker-dashboard.env
+            - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-dashboard.env
+            - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env            
+            - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env            
             - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/internal_setup/cf-deploy-akto-start' > cf-deploy-akto-start
             - sudo chmod 700 cf-deploy-akto-start
             - "./cf-deploy-akto-start < <(echo 'test')"
