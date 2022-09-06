@@ -173,7 +173,7 @@
              "yum install -y docker\n",
              "service docker start\n",
              "docker pull bkimminich/juice-shop\n",
-             "docker run -d -p 80:3000 bkimminich/juice-shop\n",
+             "docker run --restart unless-stopped -d -p 80:3000 bkimminich/juice-shop\n",
 
              "yum install -y git\n",
              "git clone https://github.com/avneesh99/gorestapi.git\n",
