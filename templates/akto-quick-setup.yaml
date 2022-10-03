@@ -1,0 +1,286 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  This template does a simple setup for all Akto modules. It sets up all
+  modules on a single instance. If you want a scalable and flexible setup, please
+  contact support@akto.io.
+Parameters:
+  SubnetId:
+    Description:
+      Select existing subnet for Akto EC2 instance. If you are choosing
+      private subnet, then make sure private subnet is configured to access public
+      internet
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: must be an existing subnet
+  KeyPair:
+    Description: Select the key pair to connect to Akto EC2 instance
+    Type: AWS::EC2::KeyPair::KeyName
+  VpcId:
+    Description: Select vpc
+    Type: AWS::EC2::VPC::Id
+  VpcCidrBlock:
+    Type: String
+    Description: Enter cidr block for selected vpc
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description:
+      The list of public subnets in your VPC. Select the 1 public subnet
+      from the same availability zone as SubnetId
+    ConstraintDescription:
+      must be a list of at least two existing subnets associated
+      with at least two different availability zones. They should be residing in the
+      selected Virtual Private Cloud.
+Mappings:
+  RegionMap:
+    "af-south-1":
+      AMI: "ami-0adee70ff4394e3d5"
+    "eu-north-1":
+      AMI: "ami-04e8b0e36ed3403dc"
+    "ap-south-1":
+      AMI: "ami-09de362f44ba0a166"
+    "eu-west-3":
+      AMI: "ami-0614433a16ab15878"
+    "eu-west-2":
+      AMI: "ami-030770b178fa9d374"
+    "eu-south-1":
+      AMI: "ami-0432f14b68c3e0273"
+    "eu-west-1":
+      AMI: "ami-0bba0a4cb75835f71"
+    "ap-northeast-3":
+      AMI: "ami-0253beba286f3e848"
+    "ap-northeast-2":
+      AMI: "ami-0e1d09d8b7c751816"
+    "me-south-1":
+      AMI: "ami-07a68e42e669daed0"
+    "ap-northeast-1":
+      AMI: "ami-06ce6680729711877"
+    "sa-east-1":
+      AMI: "ami-0656df2cc0dfd150a"
+    "ca-central-1":
+      AMI: "ami-04c12937e87474def"
+    "ap-east-1":
+      AMI: "ami-0b751f901b93720a5"
+    "ap-southeast-1":
+      AMI: "ami-0adf622550366ea53"
+    "ap-southeast-2":
+      AMI: "ami-03b836d87d294e89e"
+    "eu-central-1":
+      AMI: "ami-094c442a8e9a67935"
+    "ap-southeast-3":
+      AMI: "ami-0483d92a8124da6c9"
+    "us-east-1":
+      AMI: "ami-065efef2c739d613b"
+    "us-east-2":
+      AMI: "ami-07251f912d2a831a3"
+    "us-west-1":
+      AMI: "ami-09b2f6d85764ec71b"
+    "us-west-2":
+      AMI: "ami-0d08ef957f0e4722b"
+Resources:
+  ## Setting up mongo
+  AktoMongoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Enable the ports Mongo requires (22, 27017)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref VpcCidrBlock
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: !Ref VpcCidrBlock
+      SecurityGroupEgress: []
+  AktoMongoLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        InstanceType: m5.xlarge
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref SubnetId
+            AssociatePublicIpAddress: "false"
+            DeviceIndex: 0
+            Groups: [!Ref AktoMongoSecurityGroup]
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: "true"
+              VolumeSize: "50"
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - "\n"
+              - - "#!/bin/bash -xe"
+                - touch /tmp/hello.txt
+                - touch ~/hello.txt
+                - sudo yum update -y
+                - sudo yum install -y python python-setuptools
+                - sudo yum install -y docker
+                - sudo dockerd&
+                - sudo mkdir -p /opt/aws/bin
+                - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+                - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - export COMPOSE_FILE=docker-compose-mongo.yml
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+                - sudo chmod 700 cf-deploy-akto
+                - "./cf-deploy-akto < <(echo 'test')"
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+                - sudo chmod 700 cf-deploy-akto-start
+                - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoMongoInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Akto Mongo instance
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoMongoLaunchTemplate
+        Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
+  ## Setting up Dashboard
+  AktoDashboardTargetTrackingNetworkPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyType: TargetTrackingScaling
+      AutoScalingGroupName:
+        Ref: AktoDashboardAutoScalingGroup
+      EstimatedInstanceWarmup: 30
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 60
+  AktoDashboardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Enable the ports Akto requires (22, 8080)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref VpcCidrBlock
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref VpcCidrBlock
+      SecurityGroupEgress: []
+  AktoDashboardTargetGroup2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: "8080"
+      Protocol: HTTP
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: "8080"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId: !Ref VpcId
+      Targets: []
+      Name: AktoDashboardTargetGroup2
+  AktoDashboardAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: AktoDashboardAutoScalingGroup
+      VPCZoneIdentifier:
+        - Ref: SubnetId
+      LaunchConfigurationName:
+        Ref: AktoDashboardASGLaunchConfiguration
+      TargetGroupARNs:
+        - Ref: AktoDashboardTargetGroup2
+      MaxSize: "10"
+      MinSize: "1"
+
+  AktoDashboardASGLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+      - AktoMongoInstance
+      #- AktoNLB
+    Properties:
+      InstanceType: m5.xlarge
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      AssociatePublicIpAddress: "false"
+      KeyName:
+        Ref: KeyPair
+      SecurityGroups:
+        - Ref: AktoDashboardSecurityGroup
+      MetadataOptions:
+        HttpTokens: required
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: "true"
+            VolumeSize: "20"
+            Encrypted: true
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - "\n"
+            - - "#!/bin/bash -xe"
+              - touch /tmp/hello.txt
+              - touch ~/hello.txt
+              - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+              - sudo yum update -y
+              - sudo yum install -y python python-setuptools
+              - sudo yum install -y docker
+              - sudo dockerd&
+              - sudo mkdir -p /opt/aws/bin
+              - export COMPOSE_FILE=docker-compose-dashboard.yml
+              - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto' > cf-deploy-akto
+              - sudo chmod 700 cf-deploy-akto
+              - "./cf-deploy-akto < <(echo 'test')"
+              - sudo echo >> ~/akto/infra/docker-dashboard.env
+              - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
+                ~/akto/infra/docker-dashboard.env
+              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/segregation_2/cf-deploy-akto-start' > cf-deploy-akto-start
+              - sudo chmod 700 cf-deploy-akto-start
+              - "./cf-deploy-akto-start < <(echo 'test')"
+  AktoDashboardListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoLBDashboard
+      Port: "80"
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: AktoDashboardTargetGroup2
+  AktoLBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Enable the port AktoLB requires
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref VpcCidrBlock
+      SecurityGroupEgress: []
+  AktoLBDashboard:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        Ref: PublicSubnetIds
+      Name: AktoLBDashboard
+      SecurityGroups: [!Ref AktoLBSecurityGroup]
+Outputs:
+  AktoLBDashboard:
+    Value:
+      Ref: AktoLBDashboard
+    Description: Arn of Akto Dashboard LB
