@@ -16,7 +16,7 @@
             "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "SubnetId": {
-            "Description": "Select existing subnet for Akto EC2 instance. If you are choosing private subnet, then make sure private subnet is configured to access public internet",
+            "Description": "Select existing subnet for Akto EC2 instance. Please choose a private subnet, that is configured to access public internet (usually through NAT Gateway)",
             "Type": "AWS::EC2::Subnet::Id",
             "ConstraintDescription": "must be an existing subnet"
         },        
@@ -24,7 +24,7 @@
             "Description": "Instance type to be allocated to Akto",
             "ConstraintDescription": "Must be a valid EC2 instance type. Preferably, choose Intel series (M5 or C6I)",
             "Type": "String",
-            "Default": "m5.xlarge"
+            "Default": "m5.2xlarge"
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -143,7 +143,7 @@
                 "NetworkInterfaces": [
                     {
                         "SubnetId": {"Ref": "SubnetId"},
-                        "AssociatePublicIpAddress": "true",
+                        "AssociatePublicIpAddress": "false",
                         "DeviceIndex": "0",
                         "GroupSet": [{ "Ref" : "AktoSecurityGroup" }]
                     }
@@ -177,26 +177,6 @@
                 }
             }
         }
-    },
-    "Outputs": {
-        "URL": {
-          "Value": {
-            "Fn::Join": [
-              "",
-              [
-                "http://",
-                {
-                  "Fn::GetAtt": [
-                    "AktoInstance",
-                    "PublicIp"
-                  ]
-                },
-                ":8080"
-              ]
-            ]
-          },
-          "Description": "Newly created application URL"
-        }
-    }    
+    }  
 }
 
