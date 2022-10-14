@@ -231,6 +231,8 @@ Resources:
               - touch /tmp/hello.txt
               - touch ~/hello.txt
               - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+              - Fn::Sub: export EC2_KEY_PAIR='${KeyPair}'
+              - Fn::Sub: export EC2_SUBNET_ID='${SubnetId}'
               - sudo yum update -y
               - sudo yum install -y python python-setuptools
               - sudo yum install -y docker
