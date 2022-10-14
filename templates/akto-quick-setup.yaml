@@ -279,6 +279,34 @@ Resources:
         Ref: PublicSubnetIds
       Name: AktoLBDashboard
       SecurityGroups: [!Ref AktoLBSecurityGroup]
+  AktoDashboardTargetGroup2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: "8080"
+      Protocol: HTTP
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: "8080"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId: !Ref VpcId
+      Targets: []
+      Name: AktoDashboardTargetGroup2
+  AktoDashboardListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoLBDashboard
+      Port: "80"
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: AktoDashboardTargetGroup2
 Outputs:
   AktoLBDashboard:
     Value:
