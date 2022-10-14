@@ -40,22 +40,6 @@
       }
     },
 
-    "ALBListenerGoServerHTTPS" : {
-      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
-      "Properties" : {
-        "DefaultActions" : [{
-          "Type" : "forward",
-          "TargetGroupArn" : { "Ref" : "ALBTargetGroupGoServer" }
-        }],
-        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
-        "Port" : 443,
-        "Protocol" : "HTTPS",
-        "Certificates": [{
-          "CertificateArn": "arn:aws:acm:us-east-1:233905125530:certificate/c3e59053-07ce-4bea-a32f-7013e216fb6d"
-        }],
-        "SslPolicy": "ELBSecurityPolicy-TLS-1-2-Ext-2018-06"
-      }
-    },
     "ALBListenerGoServerHTTP" : {
       "Type" : "AWS::ElasticLoadBalancingV2::Listener",
       "Properties" : {
