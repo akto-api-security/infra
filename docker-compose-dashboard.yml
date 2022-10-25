@@ -67,6 +67,7 @@ services:
   akto-api-security-runtime:
     image: aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker-dashboard.env
+    mem_limit: 4g
     restart: always
     depends_on:
       - kafka1
