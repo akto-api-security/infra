@@ -15,7 +15,7 @@ Parameters:
     Description: Select the key pair to connect to Akto EC2 instance
     Type: AWS::EC2::KeyPair::KeyName
   VpcId:
-    Description: Select vpc
+    Description: Select a vpc where your resources are deployed, Akto will be deployed in this VPC only.
     Type: AWS::EC2::VPC::Id
   VpcCidrBlock:
     Type: String
@@ -114,6 +114,7 @@ Resources:
               Encrypted: true
         MetadataOptions:
           HttpTokens: required
+          HttpPutResponseHopLimit: 2    
         UserData:
           Fn::Base64:
             Fn::Join:
@@ -200,22 +201,40 @@ Resources:
         - Ref: AktoDashboardTargetGroup2
       MaxSize: "10"
       MinSize: "1"
-
+  AktoDashboardRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AktoDashboardRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole  
+  IamInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: AktoDashboardRole
   AktoDashboardASGLaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     DependsOn:
       - AktoMongoInstance
-      #- AktoNLB
     Properties:
       InstanceType: m5.xlarge
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       AssociatePublicIpAddress: "false"
       KeyName:
         Ref: KeyPair
+      IamInstanceProfile:
+        Ref: IamInstanceProfile
       SecurityGroups:
         - Ref: AktoDashboardSecurityGroup
       MetadataOptions:
         HttpTokens: required
+        HttpPutResponseHopLimit: 2     
       BlockDeviceMappings:
         - DeviceName: "/dev/xvda"
           Ebs:
@@ -231,8 +250,6 @@ Resources:
               - touch /tmp/hello.txt
               - touch ~/hello.txt
               - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
-              - Fn::Sub: export EC2_KEY_PAIR='${KeyPair}'
-              - Fn::Sub: export EC2_SUBNET_ID='${SubnetId}'
               - sudo yum update -y
               - sudo yum install -y python python-setuptools
               - sudo yum install -y docker
@@ -247,6 +264,8 @@ Resources:
               - sudo echo >> ~/akto/infra/docker-dashboard.env
               - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
                 ~/akto/infra/docker-dashboard.env
+              - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
+              - Fn::Sub: sudo echo EC2_SUBNET_ID='${SubnetId}' >> ~/akto/infra/docker-dashboard.env
               - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env            
               - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
               - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
@@ -300,19 +319,13 @@ Resources:
       VpcId: !Ref VpcId
       Targets: []
       Name: AktoDashboardTargetGroup2
-  AktoDashboardListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn:
-        Ref: AktoLBDashboard
-      Port: "80"
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn:
-            Ref: AktoDashboardTargetGroup2
 Outputs:
   AktoLBDashboard:
-    Value:
-      Ref: AktoLBDashboard
-    Description: Arn of Akto Dashboard LB
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - AktoLBDashboard
+          - DNSName
+        - ':80'
+    Description: Url of Akto Dashboard LB
