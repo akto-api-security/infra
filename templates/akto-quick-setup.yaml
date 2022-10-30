@@ -14,12 +14,6 @@ Parameters:
   KeyPair:
     Description: Select the key pair to connect to Akto EC2 instance
     Type: AWS::EC2::KeyPair::KeyName
-  VpcId:
-    Description: Select a vpc where your resources are deployed, Akto will be deployed in this VPC only.
-    Type: AWS::EC2::VPC::Id
-  VpcCidrBlock:
-    Type: String
-    Description: Enter cidr block for selected vpc
   PublicSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description:
@@ -76,21 +70,99 @@ Mappings:
     "us-west-2":
       AMI: "ami-0d08ef957f0e4722b"
 Resources:
+  ## Setting up VpcDetailsLambda
+  GetVpcDetailsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: DescribeAssetsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeVpcs
+            - ec2:DescribeSubnets
+            Resource: "*"
+  GetVpcDetailsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Look up info from a VPC
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - GetVpcDetailsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID:
+            Ref: SubnetId
+      Code:
+        ZipFile: >
+          var SUBNET_ID = process.env.SUBNET_ID;
+          var aws = require('aws-sdk');
+          var response = require('cfn-response');
+          var ec2 = new aws.EC2();
+          exports.handler = async function(event, context) {
+              if (event.RequestType == 'Delete') {
+                 await response.send(event, context, 'SUCCESS');
+                 return;
+              }
+              var params = {
+                 SubnetIds: [SUBNET_ID] 
+              };
+              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
+                 console.error(err);
+              });
+              var vpcId = subnets['Subnets'][0]['VpcId'];
+              var vpcs = await ec2.describeVpcs({VpcIds: [vpcId]}).promise().catch(err => {
+                 console.error(err);
+              });
+              await response.send(event, context, 'SUCCESS', {CidrBlock: vpcs['Vpcs'][0]['CidrBlock'], VpcId: vpcId})
+          };
+  CustomSourceGetVpcDetails:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - GetVpcDetailsLambda
+        - Arn 
   ## Setting up mongo
   AktoMongoSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
       GroupDescription: Enable the ports Mongo requires (22, 27017)
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref VpcCidrBlock
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          CidrIp: !Ref VpcCidrBlock
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
       SecurityGroupEgress: []
   AktoMongoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -160,17 +232,26 @@ Resources:
   AktoDashboardSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: 
+        Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - VpcId
       GroupDescription: Enable the ports Akto requires (22, 8080)
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref VpcCidrBlock
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          CidrIp: !Ref VpcCidrBlock
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
       SecurityGroupEgress: []
   AktoDashboardTargetGroup2:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -186,7 +267,10 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetType: instance
-      VpcId: !Ref VpcId
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
       Targets: []
       Name: AktoDashboardTargetGroup2
   AktoDashboardAutoScalingGroup:
@@ -266,7 +350,8 @@ Resources:
                 ~/akto/infra/docker-dashboard.env
               - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
               - Fn::Sub: sudo echo EC2_SUBNET_ID='${SubnetId}' >> ~/akto/infra/docker-dashboard.env
-              - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env            
+              - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
+              - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
               - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
               - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
               - sudo chmod 700 cf-deploy-akto-start
@@ -285,13 +370,16 @@ Resources:
   AktoLBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
       GroupDescription: Enable the port AktoLB requires
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: !Ref VpcCidrBlock
+          CidrIp: 0.0.0.0/0
       SecurityGroupEgress: []
   AktoLBDashboard:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -316,7 +404,10 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetType: instance
-      VpcId: !Ref VpcId
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
       Targets: []
       Name: AktoDashboardTargetGroup2
 Outputs:
