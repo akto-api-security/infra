@@ -60,7 +60,7 @@ services:
       - "27017:27017"
 
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:qs
+    image: aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker.env
     restart: always
     mem_limit: 4g
