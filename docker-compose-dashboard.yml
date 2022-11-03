@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:qs
+    image: aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
