@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description:
-  This template does a simple setup for all Akto modules. It sets up all
-  modules on a single instance. If you want a scalable and flexible setup, please
+  This template does a quick setup of Akto modules. It sets up Akto dashboard and mongo on seperate ec2 instances. If you want a flexible setup, please
   contact support@akto.io.
 Parameters:
   SubnetId:
