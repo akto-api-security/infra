@@ -169,7 +169,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-        InstanceType: m5.xlarge
+        InstanceType: m5a.xlarge
         KeyName:
           Ref: KeyPair
         NetworkInterfaces:
@@ -307,7 +307,7 @@ Resources:
     DependsOn:
       - AktoMongoInstance
     Properties:
-      InstanceType: m5.xlarge
+      InstanceType: m5a.xlarge
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       AssociatePublicIpAddress: "false"
       KeyName:
