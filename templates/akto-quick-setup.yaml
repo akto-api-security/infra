@@ -252,38 +252,24 @@ Resources:
             - CustomSourceGetVpcDetails
             - CidrBlock
       SecurityGroupEgress: []
-  AktoDashboardTargetGroup2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Port: "8080"
-      Protocol: HTTP
-      HealthCheckEnabled: "true"
-      HealthCheckIntervalSeconds: 10
-      HealthCheckPath: "/metrics"
-      HealthCheckPort: "8080"
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 6
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      TargetType: instance
-      VpcId: 
-        Fn::GetAtt:
-        - CustomSourceGetVpcDetails
-        - VpcId
-      Targets: []
-      Name: AktoDashboardTargetGroup2
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: AktoDashboardAutoScalingGroup
       VPCZoneIdentifier:
         - Ref: SubnetId
-      LaunchConfigurationName:
-        Ref: AktoDashboardASGLaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoDashboardLaunchTemplate
+        Version: !GetAtt AktoDashboardLaunchTemplate.LatestVersionNumber
       TargetGroupARNs:
         - Ref: AktoDashboardTargetGroup2
       MaxSize: "10"
       MinSize: "1"
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 10
+      ResourceSignal:    
+        Timeout: PT5M
   AktoDashboardRole:
     Type: AWS::IAM::Role
     Properties:
@@ -301,60 +287,71 @@ Resources:
       Path: "/"
       Roles:
         - Ref: AktoDashboardRole
-  AktoDashboardASGLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  AktoDashboardLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     DependsOn:
       - AktoMongoInstance
     Properties:
-      InstanceType: m5a.xlarge
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      AssociatePublicIpAddress: "false"
-      KeyName:
-        Ref: KeyPair
-      IamInstanceProfile:
-        Ref: IamInstanceProfile
-      SecurityGroups:
-        - Ref: AktoDashboardSecurityGroup
-      MetadataOptions:
-        HttpTokens: required
-        HttpPutResponseHopLimit: 2     
-      BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"
-          Ebs:
-            VolumeType: gp2
-            DeleteOnTermination: "true"
-            VolumeSize: "20"
-            Encrypted: true
-      UserData:
-        Fn::Base64:
-          Fn::Join:
-            - "\n"
-            - - "#!/bin/bash -xe"
-              - touch /tmp/hello.txt
-              - touch ~/hello.txt
-              - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
-              - sudo yum update -y
-              - sudo yum install -y python python-setuptools
-              - sudo yum install -y docker
-              - sudo dockerd&
-              - sudo mkdir -p /opt/aws/bin
-              - export COMPOSE_FILE=docker-compose-dashboard.yml
-              - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-              - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
-              - sudo chmod 700 cf-deploy-akto
-              - "./cf-deploy-akto < <(echo 'test')"
-              - sudo echo >> ~/akto/infra/docker-dashboard.env
-              - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
-                ~/akto/infra/docker-dashboard.env
-              - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
-              - Fn::Sub: sudo echo EC2_SUBNET_ID='${SubnetId}' >> ~/akto/infra/docker-dashboard.env
-              - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
-              - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
-              - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
-              - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
-              - sudo chmod 700 cf-deploy-akto-start
-              - "./cf-deploy-akto-start < <(echo 'test')"
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        InstanceType: m5a.xlarge
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref SubnetId
+            AssociatePublicIpAddress: "false"
+            DeviceIndex: 0
+            Groups: [!Ref AktoDashboardSecurityGroup]
+        IamInstanceProfile:
+          Arn: !GetAtt IamInstanceProfile.Arn
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2     
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: "true"
+              VolumeSize: "20"
+              Encrypted: true
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - "\n"
+              - - "#!/bin/bash -xe"
+                - touch /tmp/hello.txt
+                - touch ~/hello.txt
+                - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+                - sudo yum update -y
+                - sudo yum install -y python python-setuptools
+                - sudo yum install -y docker
+                - sudo dockerd&
+                - sudo mkdir -p /opt/aws/bin
+                - export COMPOSE_FILE=docker-compose-dashboard.yml
+                - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+                - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - sudo chmod 700 cf-deploy-akto
+                - "./cf-deploy-akto < <(echo 'test')"
+                - sudo echo >> ~/akto/infra/docker-dashboard.env
+                - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
+                  ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo EC2_SUBNET_ID='${SubnetId}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
+                - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
+                - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - sudo chmod 700 cf-deploy-akto-start
+                - "./cf-deploy-akto-start < <(echo 'test')"
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoDashboardAutoScalingGroup"
+                    - "         --region "
+                    - Ref: AWS::Region
   AktoDashboardListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
