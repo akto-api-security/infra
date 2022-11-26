@@ -22,6 +22,8 @@ Parameters:
       must be a list of at least two existing subnets associated
       with at least two different availability zones. They should be residing in the
       selected Virtual Private Cloud.
+  OwnerEmail:
+    Type: String
 Mappings:
   RegionMap:
     "af-south-1":
@@ -96,9 +98,9 @@ Resources:
   GetVpcDetailsLambda:
     Type: AWS::Lambda::Function
     Properties:
-      Description: Look up info from a VPC
-      Handler: index.handler
-      Runtime: nodejs12.x
+      Description: Look up info from a VPC and update deployment status
+      Handler: index.lambda_handler
+      Runtime: python3.9
       Timeout: 30
       Role:
         Fn::GetAtt:
@@ -106,31 +108,71 @@ Resources:
         - Arn
       Environment:
         Variables:
+          OWNER_EMAIL:
+            Ref: OwnerEmail
           SUBNET_ID:
             Ref: SubnetId
       Code:
-        ZipFile: >
-          var SUBNET_ID = process.env.SUBNET_ID;
-          var aws = require('aws-sdk');
-          var response = require('cfn-response');
-          var ec2 = new aws.EC2();
-          exports.handler = async function(event, context) {
-              if (event.RequestType == 'Delete') {
-                 await response.send(event, context, 'SUCCESS');
-                 return;
-              }
-              var params = {
-                 SubnetIds: [SUBNET_ID] 
-              };
-              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
-                 console.error(err);
-              });
-              var vpcId = subnets['Subnets'][0]['VpcId'];
-              var vpcs = await ec2.describeVpcs({VpcIds: [vpcId]}).promise().catch(err => {
-                 console.error(err);
-              });
-              await response.send(event, context, 'SUCCESS', {CidrBlock: vpcs['Vpcs'][0]['CidrBlock'], VpcId: vpcId})
-          };
+        ZipFile: |
+          import json 
+          import urllib3
+          import os 
+          import cfnresponse 
+          import logging 
+          import boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          http = urllib3.PoolManager()
+
+          def lambda_handler(event, context):
+            if event.get('RequestType') == 'Delete':
+              responseData = {}
+              responseData['message'] = 'Deleting lambda'
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              return
+
+            update_deployment_status()
+            fetch_vpc_details_resp = fetch_vpc_details()
+            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, fetch_vpc_details_resp)
+
+          def fetch_vpc_details():
+            subnet_id = os.environ['SUBNET_ID']
+            ec2 = boto3.client('ec2')
+
+            subnets = ec2.describe_subnets(
+              SubnetIds = [subnet_id]
+            )
+            vpcId = subnets['Subnets'][0]['VpcId']
+
+            vpcs = ec2.describe_vpcs(
+              VpcIds=[vpcId]
+            )
+
+            return {
+              'CidrBlock': vpcs['Vpcs'][0]['CidrBlock'],
+              'VpcId': vpcId                 
+            }
+          
+          def update_deployment_status():
+            url = "http://StairwayLBDashboard-1161183938.ap-northeast-2.elb.amazonaws.com/deployment/status"
+            payload = json.dumps({
+              "ownerEmail": os.environ['OWNER_EMAIL'],
+              "stackStatus": "STARTED",
+              "cloudType": "AWS"
+            })
+            headers = {
+              'Content-Type': 'application/json'
+            }
+            resp = http.request("POST", url,
+              body=payload,
+              headers=headers, 
+              retries = False)
+
+            logger.info('Request sent')
+            logger.info(resp.data)
+            return resp.data
   CustomSourceGetVpcDetails:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -337,6 +379,7 @@ Resources:
                 - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
                   ~/akto/infra/docker-dashboard.env
                 - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo OWNER_EMAIL='${OwnerEmail}' >> ~/akto/infra/docker-dashboard.env
                 - Fn::Sub: sudo echo EC2_SUBNET_ID='${SubnetId}' >> ~/akto/infra/docker-dashboard.env
                 - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
                 - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
