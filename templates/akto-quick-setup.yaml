@@ -132,7 +132,10 @@ Resources:
               cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
               return
 
-            update_deployment_status()
+            try:
+              update_deployment_status()
+            except:
+              print('Failed to update deployment status')
             fetch_vpc_details_resp = fetch_vpc_details()
             
             cfnresponse.send(event, context, cfnresponse.SUCCESS, fetch_vpc_details_resp)
@@ -156,7 +159,7 @@ Resources:
             }
           
           def update_deployment_status():
-            url = "http://StairwayLBDashboard-1161183938.ap-northeast-2.elb.amazonaws.com/deployment/status"
+            url = "https://stairway.akto.io/deployment/status"
             payload = json.dumps({
               "ownerEmail": os.environ['OWNER_EMAIL'],
               "stackStatus": "STARTED",
