@@ -9,11 +9,23 @@ services:
       - "8080:8080"
     depends_on:
       - kafka1
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: "akto-dashboard"
+        awslogs-stream: "akto-dashboard"
+        awslogs-create-group: "true"
 
   akto-api-security-testing:
     image: aktosecurity/akto-api-testing:latest
     env_file: ./docker-dashboard.env
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: "akto-testing"
+        awslogs-stream: "akto-testing"
+        awslogs-create-group: "true"
 
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
@@ -70,3 +82,10 @@ services:
     restart: always
     depends_on:
       - kafka1
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: "akto-runtime"
+        awslogs-stream: "akto-runtime"
+        awslogs-create-group: "true"
+      
