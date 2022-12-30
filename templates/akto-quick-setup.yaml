@@ -249,6 +249,14 @@ Resources:
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoMongoInstance"
+                    - "         --region "
+                    - Ref: AWS::Region
   AktoMongoInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -258,6 +266,11 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoMongoLaunchTemplate
         Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 100
+      ResourceSignal:    
+        Timeout: PT10M
   ## Setting up Dashboard
   AktoDashboardTargetTrackingNetworkPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -297,25 +310,23 @@ Resources:
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: AktoDashboardAutoScalingGroup
       VPCZoneIdentifier:
         - Ref: PrivateSubnetId
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoDashboardLaunchTemplate
         Version: !GetAtt AktoDashboardLaunchTemplate.LatestVersionNumber
       TargetGroupARNs:
-        - Ref: AktoDashboardTargetGroup2
+        - Ref: AktoDashboardTargetGroup
       MaxSize: "10"
       MinSize: "1"
     CreationPolicy:
       AutoScalingCreationPolicy:
         MinSuccessfulInstancesPercent: 10
       ResourceSignal:    
-        Timeout: PT5M
+        Timeout: PT10M
   AktoDashboardRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: AktoDashboardRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -384,6 +395,12 @@ Resources:
                 - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
                 - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
                 - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Join: 
+                    - ""
+                    - - "sudo echo AKTO_DASHBOARD_ROLE_NAME="
+                      - !Ref AktoDashboardRole
+                      - " >> ~/akto/infra/docker-dashboard.env"
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
@@ -405,7 +422,7 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn:
-            Ref: AktoDashboardTargetGroup2
+            Ref: AktoDashboardTargetGroup
   AktoLBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -427,9 +444,8 @@ Resources:
       IpAddressType: ipv4
       Subnets:
         Ref: PublicSubnetIds
-      Name: AktoLBDashboard
       SecurityGroups: [!Ref AktoLBSecurityGroup]
-  AktoDashboardTargetGroup2:
+  AktoDashboardTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Port: "8080"
@@ -448,7 +464,6 @@ Resources:
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
-      Name: AktoDashboardTargetGroup2
 Outputs:
   AktoLBDashboard:
     Value: !Join 
