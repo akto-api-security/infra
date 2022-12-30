@@ -395,7 +395,7 @@ Resources:
                 - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
                 - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
                 - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
-                - Fn::Sub: sudo echo AWS_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
                 - Fn::Join: 
                     - ""
                     - - "sudo echo AKTO_DASHBOARD_ROLE_NAME="
