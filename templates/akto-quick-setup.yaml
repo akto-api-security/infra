@@ -249,6 +249,14 @@ Resources:
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoMongoInstance"
+                    - "         --region "
+                    - Ref: AWS::Region
   AktoMongoInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -258,6 +266,11 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoMongoLaunchTemplate
         Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 100
+      ResourceSignal:    
+        Timeout: PT10M
   ## Setting up Dashboard
   AktoDashboardTargetTrackingNetworkPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -310,7 +323,7 @@ Resources:
       AutoScalingCreationPolicy:
         MinSuccessfulInstancesPercent: 10
       ResourceSignal:    
-        Timeout: PT5M
+        Timeout: PT10M
   AktoDashboardRole:
     Type: AWS::IAM::Role
     Properties:
