@@ -19,6 +19,8 @@ Parameters:
       must be a list of at least two existing subnets associated
       with at least two different availability zones. They should be residing in the
       selected Virtual Private Cloud.
+  Tags:
+    Type: String
   UserEmail:
     Type: String
 Mappings:
@@ -69,6 +71,103 @@ Mappings:
       AMI: "ami-0d08ef957f0e4722b"
 Resources:
   ## Setting up VpcDetailsLambda
+  LambdaTagParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+            - sts:AssumeRole
+
+  LambdaTagParser:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.main
+      Role:
+        Fn::GetAtt: 
+          - LambdaTagParserRole
+          - Arn
+      Runtime: nodejs16.x
+      Code:
+        ZipFile: |
+              exports.main = (event, context, callback) => {
+                  let keyPairString = event.ResourceProperties.data;
+                  console.log(keyPairString);
+                  console.log(event);
+                  let keyPairs = keyPairString.split(',').map( item => ({ 'Key': item.split('=')[0], 'Value': item.split('=')[1]}));
+                  console.log(keyPairs);
+                  let keyPairsForASG = []
+                  keyPairs.forEach((keyPair) => {
+                    keyPairsForASG.push({
+                      'Key': keyPair.Key,
+                      'Value': keyPair.Value,
+                      'PropagateAtLaunch': 'true'
+                    })
+                  })
+                  console.log(keyPairsForASG);
+                 sendResponse(event,context,"SUCCESS", { result_tags: keyPairs, result_tags_asg: keyPairsForASG });
+              };
+
+              function sendResponse(event, context, status, data, err) {
+                 var reason = err ? err.message : '';
+                 var responseBody = {
+                   StackId: event.StackId,
+                   RequestId: event.RequestId,
+                   LogicalResourceId: event.LogicalResourceId,
+                   PhysicalResourceId: 'tagparser-' + JSON.stringify(event.ResourceProperties.data),
+                   Status: status,
+                   Data: data
+                 };
+                 console.log("RESPONSE:\n", JSON.stringify(responseBody));
+                 var json = JSON.stringify(responseBody);
+
+                 var https = require("https");
+                 var url = require("url");
+
+                 var parsedUrl = url.parse(event.ResponseURL);
+                 var options = {
+                     hostname: parsedUrl.hostname,
+                     port: 443,
+                     path: parsedUrl.path,
+                     method: "PUT",
+                     headers: {
+                       "content-type": "",
+                       "content-length": json.length
+                     }
+                   };
+
+                 var request = https.request(options, function(response) {
+                     console.log("STATUS: " + response.statusCode);
+                     console.log("HEADERS: " + JSON.stringify(response.headers));
+                     context.done(null, data);
+                   });
+
+                   request.on("error", function(error) {
+                     console.log("sendResponse Error:\n", error);
+                     context.done(error);
+                   });
+
+                   request.on("end", function() {
+                     console.log("end");
+                   });
+                   request.write(json);
+                   request.end();
+              }
+  GetResourceTags:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - LambdaTagParser
+        - Arn
+      data: !Ref Tags
   GetVpcDetailsLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -261,8 +360,9 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       Tags:
-        - Key: Name
-          Value: Akto Mongo instance
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoMongoLaunchTemplate
         Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
@@ -310,6 +410,10 @@ Resources:
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      Tags:
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags_asg
       VPCZoneIdentifier:
         - Ref: PrivateSubnetId
       LaunchTemplate:
