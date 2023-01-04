@@ -21,6 +21,10 @@ Parameters:
       selected Virtual Private Cloud.
   Tags:
     Type: String
+    Description:
+      Add tags in the form of key1=value1,key2=value2. These tags will be added to all the resources created by Akto
+    Default:
+      teamName=security,product=Akto
   UserEmail:
     Type: String
 Mappings:
@@ -85,6 +89,7 @@ Resources:
               - lambda.amazonaws.com
             Action:
             - sts:AssumeRole
+
   LambdaTagParser:
     Type: AWS::Lambda::Function
     Properties:
