@@ -70,7 +70,7 @@ Mappings:
     "us-west-2":
       AMI: "ami-0d08ef957f0e4722b"
 Resources:
-  ## Setting up VpcDetailsLambda
+  ## Setting up TagParserLambda
   LambdaTagParserRole:
     Type: AWS::IAM::Role
     Properties:
@@ -85,7 +85,6 @@ Resources:
               - lambda.amazonaws.com
             Action:
             - sts:AssumeRole
-
   LambdaTagParser:
     Type: AWS::Lambda::Function
     Properties:
@@ -168,6 +167,7 @@ Resources:
         - LambdaTagParser
         - Arn
       data: !Ref Tags
+  ## Setting up GetVpcDetails Lambda
   GetVpcDetailsLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -191,6 +191,10 @@ Resources:
             - ec2:DescribeVpcs
             - ec2:DescribeSubnets
             Resource: "*"
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   GetVpcDetailsLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -208,6 +212,10 @@ Resources:
             Ref: UserEmail
           SUBNET_ID:
             Ref: PrivateSubnetId
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
       Code:
         ZipFile: |
           import json 
@@ -304,6 +312,10 @@ Resources:
             - CustomSourceGetVpcDetails
             - CidrBlock
       SecurityGroupEgress: []
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   AktoMongoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -407,6 +419,10 @@ Resources:
             - CustomSourceGetVpcDetails
             - CidrBlock
       SecurityGroupEgress: []
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -438,6 +454,10 @@ Resources:
           Principal:
             Service: ec2.amazonaws.com
           Action: sts:AssumeRole  
+      Tags:
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   IamInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -541,6 +561,10 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress: []
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   AktoLBDashboard:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -549,6 +573,10 @@ Resources:
       Subnets:
         Ref: PublicSubnetIds
       SecurityGroups: [!Ref AktoLBSecurityGroup]
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
   AktoDashboardTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -568,6 +596,10 @@ Resources:
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
+      Tags: 
+        Fn::GetAtt:
+          - GetResourceTags
+          - result_tags
 Outputs:
   AktoLBDashboard:
     Value: !Join 
