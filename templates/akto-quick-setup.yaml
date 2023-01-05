@@ -105,7 +105,7 @@ Resources:
                   let keyPairString = event.ResourceProperties.data;
                   console.log(keyPairString);
                   console.log(event);
-                  let keyPairs = keyPairString.split(',').map( item => ({ 'Key': item.split('=')[0], 'Value': item.split('=')[1]}));
+                  let keyPairs = keyPairString.trim().split(',').map( item => ({ 'Key': item.split('=')[0].trim(), 'Value': item.split('=')[1].trim()}));
                   console.log(keyPairs);
                   let keyPairsForASG = []
                   keyPairs.forEach((keyPair) => {
