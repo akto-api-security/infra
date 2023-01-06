@@ -52,7 +52,7 @@ services:
       - "27017:27017"
 
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:latest
+    image: aktosecurity/akto-api-security-dashboard:bhavik
     env_file: ./docker.env
     restart: always
     ports: 
