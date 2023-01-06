@@ -105,10 +105,12 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
+    rm -rdf infra
+    rm -rdf infra-feature-self_hosting
     curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/self_hosting.zip
     log_step 'unpacking...'
-    unzip master.zip
-    mv infra-feature-self_hosting infra
+    unzip -o master.zip
+    mv -f infra-feature-self_hosting infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
@@ -204,25 +206,33 @@ log_step "running Akto! ${WHITE}${BOLD}This can take up to 5 minutes${NORMAL}"
 
 export AKTO_KAFKA_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
 echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> .env
-$MAYBE_SUDO docker-compose up
+$MAYBE_SUDO docker-compose up -d
 
 echo ""
 echo " -- ${GREEN}${BOLD}!! AKTO IS BOOTING !!${NORMAL} --"
 
-WAITED=0
+check_for_start() {
+  container_id=$(docker ps | grep dashboard | awk -F " " '{print $1}')
+  logs=$(docker logs "$container_id" 2>&1)
+  started_lines=$(echo "$logs" | grep "Started")
+  line_count=$(echo "$started_lines" | wc -l)
+  if [ "$line_count" -gt 1 ]; then
+    return 0
+  else
+    return 1
+  fi
+}
 
 sp="/-\|"
 echo -n ' '
 i=0
-while [ $WAITED -lt 100 ]; do
-  WAITED=$((WAITED + 1))
-  sleep 0.1
+
+until check_for_start; do
+  sleep 0.5
   printf "\b${sp:i++%${#sp}:1}"
 done
 
-
 echo " -- ${GREEN}${BOLD}!! AKTO LAUNCHED !!${NORMAL} --"
-
 
 # NB: empty stuff to fully wipe out previous line completely
 printf "\r%s%s%s%s%s%s%s%s" "$MAGENTA" 'Check out your ' "$BOLD" 'BROWSER' "${NORMAL}${MAGENTA}" ' for some awesomeness!!!' "$NORMAL" '                              '
