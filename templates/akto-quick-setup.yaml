@@ -19,12 +19,6 @@ Parameters:
       must be a list of at least two existing subnets associated
       with at least two different availability zones. They should be residing in the
       selected Virtual Private Cloud.
-  Tags:
-    Type: String
-    Description:
-      Add tags in the form of key1=value1,key2=value2. These tags will be added to all the resources created by Akto
-    Default:
-      teamName=security,product=Akto
   UserEmail:
     Type: String
 Mappings:
@@ -74,105 +68,7 @@ Mappings:
     "us-west-2":
       AMI: "ami-0d08ef957f0e4722b"
 Resources:
-  ## Setting up TagParserLambda
-  LambdaTagParserRole:
-    Type: AWS::IAM::Role
-    Properties:
-      ManagedPolicyArns:
-       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-              - lambda.amazonaws.com
-            Action:
-            - sts:AssumeRole
-
-  LambdaTagParser:
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: index.main
-      Role:
-        Fn::GetAtt: 
-          - LambdaTagParserRole
-          - Arn
-      Runtime: nodejs16.x
-      Code:
-        ZipFile: |
-              exports.main = (event, context, callback) => {
-                  let keyPairString = event.ResourceProperties.data;
-                  console.log(keyPairString);
-                  console.log(event);
-                  let keyPairs = keyPairString.trim().split(',').map( item => ({ 'Key': item.split('=')[0].trim(), 'Value': item.split('=')[1].trim()}));
-                  console.log(keyPairs);
-                  let keyPairsForASG = []
-                  keyPairs.forEach((keyPair) => {
-                    keyPairsForASG.push({
-                      'Key': keyPair.Key,
-                      'Value': keyPair.Value,
-                      'PropagateAtLaunch': 'true'
-                    })
-                  })
-                  console.log(keyPairsForASG);
-                 sendResponse(event,context,"SUCCESS", { result_tags: keyPairs, result_tags_asg: keyPairsForASG });
-              };
-
-              function sendResponse(event, context, status, data, err) {
-                 var reason = err ? err.message : '';
-                 var responseBody = {
-                   StackId: event.StackId,
-                   RequestId: event.RequestId,
-                   LogicalResourceId: event.LogicalResourceId,
-                   PhysicalResourceId: 'tagparser-' + JSON.stringify(event.ResourceProperties.data),
-                   Status: status,
-                   Data: data
-                 };
-                 console.log("RESPONSE:\n", JSON.stringify(responseBody));
-                 var json = JSON.stringify(responseBody);
-
-                 var https = require("https");
-                 var url = require("url");
-
-                 var parsedUrl = url.parse(event.ResponseURL);
-                 var options = {
-                     hostname: parsedUrl.hostname,
-                     port: 443,
-                     path: parsedUrl.path,
-                     method: "PUT",
-                     headers: {
-                       "content-type": "",
-                       "content-length": json.length
-                     }
-                   };
-
-                 var request = https.request(options, function(response) {
-                     console.log("STATUS: " + response.statusCode);
-                     console.log("HEADERS: " + JSON.stringify(response.headers));
-                     context.done(null, data);
-                   });
-
-                   request.on("error", function(error) {
-                     console.log("sendResponse Error:\n", error);
-                     context.done(error);
-                   });
-
-                   request.on("end", function() {
-                     console.log("end");
-                   });
-                   request.write(json);
-                   request.end();
-              }
-  GetResourceTags:
-    Type: AWS::CloudFormation::CustomResource
-    Properties:
-      ServiceToken:
-        Fn::GetAtt:
-        - LambdaTagParser
-        - Arn
-      data: !Ref Tags
-  ## Setting up GetVpcDetails Lambda
+  ## Setting up VpcDetailsLambda
   GetVpcDetailsLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -196,10 +92,6 @@ Resources:
             - ec2:DescribeVpcs
             - ec2:DescribeSubnets
             Resource: "*"
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   GetVpcDetailsLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -217,10 +109,6 @@ Resources:
             Ref: UserEmail
           SUBNET_ID:
             Ref: PrivateSubnetId
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
       Code:
         ZipFile: |
           import json 
@@ -317,10 +205,6 @@ Resources:
             - CustomSourceGetVpcDetails
             - CidrBlock
       SecurityGroupEgress: []
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   AktoMongoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -377,9 +261,8 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       Tags:
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
+        - Key: Name
+          Value: Akto Mongo instance
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoMongoLaunchTemplate
         Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
@@ -424,17 +307,9 @@ Resources:
             - CustomSourceGetVpcDetails
             - CidrBlock
       SecurityGroupEgress: []
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      Tags:
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags_asg
       VPCZoneIdentifier:
         - Ref: PrivateSubnetId
       LaunchTemplate:
@@ -459,10 +334,6 @@ Resources:
           Principal:
             Service: ec2.amazonaws.com
           Action: sts:AssumeRole  
-      Tags:
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   IamInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -566,10 +437,6 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress: []
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   AktoLBDashboard:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -578,10 +445,6 @@ Resources:
       Subnets:
         Ref: PublicSubnetIds
       SecurityGroups: [!Ref AktoLBSecurityGroup]
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
   AktoDashboardTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -601,10 +464,6 @@ Resources:
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
-      Tags: 
-        Fn::GetAtt:
-          - GetResourceTags
-          - result_tags
 Outputs:
   AktoLBDashboard:
     Value: !Join 
