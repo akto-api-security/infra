@@ -1,0 +1,476 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  This template does a quick setup of Akto modules. It sets up Akto dashboard and mongo on seperate ec2 instances. If you want a flexible setup, please
+  contact support@akto.io.
+Parameters:
+  PrivateSubnetId:
+    Description:
+     Select a private subnetid where Akto EC2 instances will be deployed
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: must be an existing subnet
+  KeyPair:
+    Description: Select the key pair to connect to Akto EC2 instances
+    Type: AWS::EC2::KeyPair::KeyName
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description:
+      Select 2 public subnets. Atleast 1 should be in the same availability zone as the PrivateSubnetId you will provide below
+    ConstraintDescription:
+      must be a list of at least two existing subnets associated
+      with at least two different availability zones. They should be residing in the
+      selected Virtual Private Cloud.
+  UserEmail:
+    Type: String
+Mappings:
+  RegionMap:
+    "af-south-1":
+      AMI: "ami-0adee70ff4394e3d5"
+    "eu-north-1":
+      AMI: "ami-04e8b0e36ed3403dc"
+    "ap-south-1":
+      AMI: "ami-09de362f44ba0a166"
+    "eu-west-3":
+      AMI: "ami-0614433a16ab15878"
+    "eu-west-2":
+      AMI: "ami-030770b178fa9d374"
+    "eu-south-1":
+      AMI: "ami-0432f14b68c3e0273"
+    "eu-west-1":
+      AMI: "ami-0bba0a4cb75835f71"
+    "ap-northeast-3":
+      AMI: "ami-0253beba286f3e848"
+    "ap-northeast-2":
+      AMI: "ami-0e1d09d8b7c751816"
+    "me-south-1":
+      AMI: "ami-07a68e42e669daed0"
+    "ap-northeast-1":
+      AMI: "ami-06ce6680729711877"
+    "sa-east-1":
+      AMI: "ami-0656df2cc0dfd150a"
+    "ca-central-1":
+      AMI: "ami-04c12937e87474def"
+    "ap-east-1":
+      AMI: "ami-0b751f901b93720a5"
+    "ap-southeast-1":
+      AMI: "ami-0adf622550366ea53"
+    "ap-southeast-2":
+      AMI: "ami-03b836d87d294e89e"
+    "eu-central-1":
+      AMI: "ami-094c442a8e9a67935"
+    "ap-southeast-3":
+      AMI: "ami-0483d92a8124da6c9"
+    "us-east-1":
+      AMI: "ami-065efef2c739d613b"
+    "us-east-2":
+      AMI: "ami-07251f912d2a831a3"
+    "us-west-1":
+      AMI: "ami-09b2f6d85764ec71b"
+    "us-west-2":
+      AMI: "ami-0d08ef957f0e4722b"
+Resources:
+  ## Setting up VpcDetailsLambda
+  GetVpcDetailsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: DescribeAssetsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeVpcs
+            - ec2:DescribeSubnets
+            Resource: "*"
+  GetVpcDetailsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Look up info from a VPC and update deployment status
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - GetVpcDetailsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          OWNER_EMAIL:
+            Ref: UserEmail
+          SUBNET_ID:
+            Ref: PrivateSubnetId
+      Code:
+        ZipFile: |
+          import json 
+          import urllib3
+          import os 
+          import cfnresponse 
+          import logging 
+          import boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          http = urllib3.PoolManager()
+
+          def lambda_handler(event, context):
+            if event.get('RequestType') == 'Delete':
+              responseData = {}
+              responseData['message'] = 'Deleting lambda'
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              return
+
+            try:
+              update_deployment_status()
+            except:
+              print('Failed to update deployment status')
+            fetch_vpc_details_resp = fetch_vpc_details()
+            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, fetch_vpc_details_resp)
+
+          def fetch_vpc_details():
+            subnet_id = os.environ['SUBNET_ID']
+            ec2 = boto3.client('ec2')
+
+            subnets = ec2.describe_subnets(
+              SubnetIds = [subnet_id]
+            )
+            vpcId = subnets['Subnets'][0]['VpcId']
+
+            vpcs = ec2.describe_vpcs(
+              VpcIds=[vpcId]
+            )
+
+            return {
+              'CidrBlock': vpcs['Vpcs'][0]['CidrBlock'],
+              'VpcId': vpcId                 
+            }
+          
+          def update_deployment_status():
+            url = "https://stairway.akto.io/deployment/status"
+            payload = json.dumps({
+              "ownerEmail": os.environ['OWNER_EMAIL'],
+              "stackStatus": "STARTED",
+              "cloudType": "AWS"
+            })
+            headers = {
+              'Content-Type': 'application/json'
+            }
+            resp = http.request("POST", url,
+              body=payload,
+              headers=headers, 
+              retries = False)
+
+            logger.info('Request sent')
+            logger.info(resp.data)
+            return resp.data
+  CustomSourceGetVpcDetails:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - GetVpcDetailsLambda
+        - Arn 
+  ## Setting up mongo
+  AktoMongoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the ports Mongo requires (22, 27017)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
+      SecurityGroupEgress: []
+  AktoMongoLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        InstanceType: m5a.xlarge
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref PrivateSubnetId
+            AssociatePublicIpAddress: "false"
+            DeviceIndex: 0
+            Groups: [!Ref AktoMongoSecurityGroup]
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: "true"
+              VolumeSize: "50"
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2    
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - "\n"
+              - - "#!/bin/bash -xe"
+                - touch /tmp/hello.txt
+                - touch ~/hello.txt
+                - sudo yum update -y
+                - sudo yum install -y python python-setuptools
+                - sudo yum install -y docker
+                - sudo dockerd&
+                - sudo mkdir -p /opt/aws/bin
+                - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+                - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - export COMPOSE_FILE=docker-compose-mongo.yml
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - sudo chmod 700 cf-deploy-akto
+                - "./cf-deploy-akto < <(echo 'test')"
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - sudo chmod 700 cf-deploy-akto-start
+                - "./cf-deploy-akto-start < <(echo 'test')"
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoMongoInstance"
+                    - "         --region "
+                    - Ref: AWS::Region
+  AktoMongoInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Akto Mongo instance
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoMongoLaunchTemplate
+        Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 100
+      ResourceSignal:    
+        Timeout: PT10M
+  ## Setting up Dashboard
+  AktoDashboardTargetTrackingNetworkPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyType: TargetTrackingScaling
+      AutoScalingGroupName:
+        Ref: AktoDashboardAutoScalingGroup
+      EstimatedInstanceWarmup: 30
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 60
+  AktoDashboardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: 
+        Fn::GetAtt:
+          - CustomSourceGetVpcDetails
+          - VpcId
+      GroupDescription: Enable the ports Akto requires (22, 8080)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 
+            Fn::GetAtt:
+            - CustomSourceGetVpcDetails
+            - CidrBlock
+      SecurityGroupEgress: []
+  AktoDashboardAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Ref: PrivateSubnetId
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoDashboardLaunchTemplate
+        Version: !GetAtt AktoDashboardLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - Ref: AktoDashboardTargetGroup
+      MaxSize: "10"
+      MinSize: "1"
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 10
+      ResourceSignal:    
+        Timeout: PT10M
+  AktoDashboardRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole  
+  IamInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: AktoDashboardRole
+  AktoDashboardLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - AktoMongoInstance
+    Properties:
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        InstanceType: m5a.xlarge
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref PrivateSubnetId
+            AssociatePublicIpAddress: "false"
+            DeviceIndex: 0
+            Groups: [!Ref AktoDashboardSecurityGroup]
+        IamInstanceProfile:
+          Arn: !GetAtt IamInstanceProfile.Arn
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2     
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: "true"
+              VolumeSize: "20"
+              Encrypted: true
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - "\n"
+              - - "#!/bin/bash -xe"
+                - touch /tmp/hello.txt
+                - touch ~/hello.txt
+                - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
+                - sudo yum update -y
+                - sudo yum install -y python python-setuptools
+                - sudo yum install -y docker
+                - sudo dockerd&
+                - sudo mkdir -p /opt/aws/bin
+                - export COMPOSE_FILE=docker-compose-dashboard.yml
+                - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+                - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - sudo chmod 700 cf-deploy-akto
+                - "./cf-deploy-akto < <(echo 'test')"
+                - sudo echo >> ~/akto/infra/docker-dashboard.env
+                - sudo echo AKTO_MONGO_CONN=mongodb://$AKTO_MONGO_CONN:27017/admini >>
+                  ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo OWNER_EMAIL='${UserEmail}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo EC2_SUBNET_ID='${PrivateSubnetId}' >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env   
+                - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
+                - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Join: 
+                    - ""
+                    - - "sudo echo AKTO_DASHBOARD_ROLE_NAME="
+                      - !Ref AktoDashboardRole
+                      - " >> ~/akto/infra/docker-dashboard.env"
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - sudo chmod 700 cf-deploy-akto-start
+                - "./cf-deploy-akto-start < <(echo 'test')"
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoDashboardAutoScalingGroup"
+                    - "         --region "
+                    - Ref: AWS::Region
+  AktoDashboardListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AktoLBDashboard
+      Port: "80"
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: AktoDashboardTargetGroup
+  AktoLBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: Enable the port AktoLB requires
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress: []
+  AktoLBDashboard:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        Ref: PublicSubnetIds
+      SecurityGroups: [!Ref AktoLBSecurityGroup]
+  AktoDashboardTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: "8080"
+      Protocol: HTTP
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: "/metrics"
+      HealthCheckPort: "8080"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId: 
+        Fn::GetAtt:
+        - CustomSourceGetVpcDetails
+        - VpcId
+      Targets: []
+Outputs:
+  AktoLBDashboard:
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - AktoLBDashboard
+          - DNSName
+        - ':80'
+    Description: Url of Akto Dashboard LB
