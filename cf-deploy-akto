@@ -106,11 +106,11 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   else
     log_step 'downloading...'
     rm -rdf infra
-    rm -rdf infra-feature-self_hosting
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/self_hosting.zip
+    rm -rdf infra-feature-local_fix
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/local_fix.zip
     log_step 'unpacking...'
     unzip -o master.zip
-    mv -f infra-feature-self_hosting infra
+    mv -f infra-feature-local_fix infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
