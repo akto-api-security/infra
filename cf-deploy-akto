@@ -181,7 +181,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
 
   if akto_containers_present; then
     log_step 'noticed you have tried Akto before, cleaning up...'
-    $MAYBE_SUDO docker-compose rm -fsv
+    #$MAYBE_SUDO docker-compose rm -fsv
   fi
 else
   cd "$DOCKER_CONTEXT" || error_exit "Couldn't \`cd\` into '$DOCKER_CONTEXT'" \
@@ -206,7 +206,7 @@ log_step "running Akto! ${WHITE}${BOLD}This can take up to 5 minutes${NORMAL}"
 
 export AKTO_KAFKA_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
 echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> .env
-echo DASHBOARD_MODE=local_deploy >> .env
+cat docker.env
 $MAYBE_SUDO docker-compose up -d
 
 echo ""
