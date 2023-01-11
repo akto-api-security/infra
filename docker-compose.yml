@@ -70,6 +70,7 @@ services:
     depends_on:
       - mongo    
     restart: always
+    
   akto-puppeteer-replay:
     image: ayush12493/puppeteer-test:latest-amd64
     ports:
