@@ -76,7 +76,7 @@ services:
     network_mode: host
     
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:latest
+    image: aktosecurity/akto-api-testing:bhavik
     env_file: ./docker.env
     depends_on:
       - mongo    
