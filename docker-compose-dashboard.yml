@@ -71,3 +71,9 @@ services:
     restart: always
     depends_on:
       - kafka1
+    
+  akto-puppeteer-replay:
+    image: ayush12493/puppeteer-test:latest
+    ports:
+      - "3000:3000"
+    restart: always
