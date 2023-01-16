@@ -181,7 +181,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
 
   if akto_containers_present; then
     log_step 'noticed you have tried Akto before, cleaning up...'
-    #$MAYBE_SUDO docker-compose rm -fsv
+    $MAYBE_SUDO docker-compose rm -fsv
   fi
 else
   cd "$DOCKER_CONTEXT" || error_exit "Couldn't \`cd\` into '$DOCKER_CONTEXT'" \
