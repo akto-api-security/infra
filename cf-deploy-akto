@@ -121,8 +121,6 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   DOCKER_CONTEXT="$(pwd)"
 
   log_step 'setting environment variables'
-  read -p "Enter your license key: " licenseKey
-  echo "LICENSE_KEY=$licenseKey" >> docker.env
 
   if ! command_present docker; then
     # shellcheck disable=2016
