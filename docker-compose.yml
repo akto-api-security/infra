@@ -12,7 +12,7 @@ services:
       - "27017:27017"
 
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:bhavik
+    image: aktosecurity/akto-api-security-dashboard:local
     env_file: ./docker.env
     restart: always
     ports: 
@@ -21,7 +21,7 @@ services:
       - mongo
     
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:bhavik
+    image: aktosecurity/akto-api-testing:latest
     env_file: ./docker.env
     depends_on:
       - mongo    
