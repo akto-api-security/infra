@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  This template does a quick setup of Akto modules. It sets up Akto dashboard and mongo on a single ec2 instance. If you want a flexible setup, please
+  contact support@akto.io.
+Parameters:
+  vpcID: 
+    Type: AWS::EC2::VPC::Id
+    Description: Enter VPC Id where Akto EC2 instances will be deployed
+    ConstraintDescription: must be an existing vpc
+  KeyPair:
+    Description: Select the key pair to connect to Akto EC2 instances
+    Type: AWS::EC2::KeyPair::KeyName
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description:
+      Select a private subnetid where Akto EC2 instances will be deployed
+    ConstraintDescription: must be an existing subnet
+  UserEmail:
+    Type: String
+Mappings:
+  RegionMap:
+    "af-south-1":
+      AMI: "ami-0adee70ff4394e3d5"
+    "eu-north-1":
+      AMI: "ami-04e8b0e36ed3403dc"
+    "ap-south-1":
+      AMI: "ami-09de362f44ba0a166"
+    "eu-west-3":
+      AMI: "ami-0614433a16ab15878"
+    "eu-west-2":
+      AMI: "ami-030770b178fa9d374"
+    "eu-south-1":
+      AMI: "ami-0432f14b68c3e0273"
+    "eu-west-1":
+      AMI: "ami-0bba0a4cb75835f71"
+    "ap-northeast-3":
+      AMI: "ami-0253beba286f3e848"
+    "ap-northeast-2":
+      AMI: "ami-0e1d09d8b7c751816"
+    "me-south-1":
+      AMI: "ami-07a68e42e669daed0"
+    "ap-northeast-1":
+      AMI: "ami-06ce6680729711877"
+    "sa-east-1":
+      AMI: "ami-0656df2cc0dfd150a"
+    "ca-central-1":
+      AMI: "ami-04c12937e87474def"
+    "ap-east-1":
+      AMI: "ami-0b751f901b93720a5"
+    "ap-southeast-1":
+      AMI: "ami-0adf622550366ea53"
+    "ap-southeast-2":
+      AMI: "ami-03b836d87d294e89e"
+    "eu-central-1":
+      AMI: "ami-094c442a8e9a67935"
+    "ap-southeast-3":
+      AMI: "ami-0483d92a8124da6c9"
+    "us-east-1":
+      AMI: "ami-065efef2c739d613b"
+    "us-east-2":
+      AMI: "ami-07251f912d2a831a3"
+    "us-west-1":
+      AMI: "ami-09b2f6d85764ec71b"
+    "us-west-2":
+      AMI: "ami-0d08ef957f0e4722b"
+Resources:
+  ## Setting up mongo and dashboard
+  AktoMongoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpcID
+      GroupDescription: Enable the ports Mongo and dashboard require (22, 27017, 8080)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress: []
+  AktoMongoLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-0b94b3bf2478e97f4
+        InstanceType: t2.medium
+        KeyName:
+          Ref: KeyPair
+        NetworkInterfaces:
+          - SubnetId: !Ref PrivateSubnetId
+            AssociatePublicIpAddress: "false"
+            DeviceIndex: 0
+            Groups: [!Ref AktoMongoSecurityGroup]
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: "true"
+              VolumeSize: "5"
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2    
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - "\n"
+              - - "#!/bin/bash -xe"
+                - cd ~/akto/infra
+                - git restore .
+                - git pull
+                - sudo systemctl start docker
+                - sudo echo >> ~/akto/infra/docker.env
+                - sudo echo AKTO_MONGO_CONN=mongodb://mongo:27017/admini >>
+                  ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo EC2_KEY_PAIR='${KeyPair}' >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo OWNER_EMAIL='${UserEmail}' >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo EC2_SUBNET_ID='${PrivateSubnetId}' >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo AWS_REGION=${AWS::Region} >> ~/akto/infra/docker.env   
+                - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker.env            
+                - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo AKTO_DASHBOARD_ROLE_NAME='AktoDashboardRole' >> ~/akto/infra/docker.env
+                - Fn::Sub: sudo echo DEPLOYMENT_VERSION=V2 >> ~/akto/infra/docker.env
+                - cd ~/akto/infra
+                - docker-compose pull
+                - docker-compose up -d --remove-orphans
+                - cd ~/etc/cloud/cloud.cfg.d
+                - touch cloud-config.cfg
+                - echo "" > cloud-config.d
+                - echo "#cloud-config" >> cloud-config.cfg
+                - echo "cloud_final_modules:" >> cloud-config.cfg
+                - echo "- [scripts-user, always]" >> cloud-config.cfg
+                - Fn::Join:
+                  - ''
+                  - - sudo /opt/aws/bin/cfn-signal -s true
+                    - "         --stack "
+                    - Ref: AWS::StackName
+                    - "         --resource AktoMongoInstance"
+                    - "         --region "
+                    - Ref: AWS::Region
+  AktoMongoInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Akto Mongo instance
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoMongoLaunchTemplate
+        Version: !GetAtt AktoMongoLaunchTemplate.LatestVersionNumber
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 100
+      ResourceSignal:    
+        Timeout: PT10M
+Outputs:
+  AKTOMONGOCONN:
+    Value: !Join 
+      - ''
+      - - 'mongodb://'
+        - !GetAtt 
+          - AktoMongoInstance
+          - PrivateIp
+        - ':27017/admin'
+    Description: MongoDB connection String
+  INSTANCEID:
+    Value: !Ref AktoMongoInstance
