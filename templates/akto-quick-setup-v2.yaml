@@ -89,7 +89,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         ImageId: ami-0b4b5be097655283d
-        InstanceType: t2.medium
+        InstanceType: m5a.xlarge
         KeyName:
           Ref: KeyPair
         NetworkInterfaces:
@@ -129,7 +129,6 @@ Resources:
                 - Fn::Sub: sudo echo AKTO_DASHBOARD_ROLE_NAME='AktoDashboardRole' >> ~/akto/infra/docker.env
                 - Fn::Sub: sudo echo DEPLOYMENT_VERSION=V2 >> ~/akto/infra/docker.env
                 - cd ~/akto/infra
-                - docker-compose pull
                 - docker-compose up -d --remove-orphans
                 - cd /etc/cloud/cloud.cfg.d
                 - touch cloud-config.cfg
