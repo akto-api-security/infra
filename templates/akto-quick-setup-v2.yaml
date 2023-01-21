@@ -88,7 +88,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId: ami-0b94b3bf2478e97f4
+        ImageId: ami-0b4b5be097655283d
         InstanceType: t2.medium
         KeyName:
           Ref: KeyPair
@@ -102,7 +102,7 @@ Resources:
             Ebs:
               VolumeType: gp2
               DeleteOnTermination: "true"
-              VolumeSize: "5"
+              VolumeSize: "50"
               Encrypted: true
         MetadataOptions:
           HttpTokens: required
@@ -131,7 +131,7 @@ Resources:
                 - cd ~/akto/infra
                 - docker-compose pull
                 - docker-compose up -d --remove-orphans
-                - cd ~/etc/cloud/cloud.cfg.d
+                - cd /etc/cloud/cloud.cfg.d
                 - touch cloud-config.cfg
                 - echo "" > cloud-config.d
                 - echo "#cloud-config" >> cloud-config.cfg
