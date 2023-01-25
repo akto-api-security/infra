@@ -21,7 +21,7 @@ services:
       - mongo
     
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:latest
+    image: aktosecurity/akto-api-testing:local
     env_file: ./docker.env
     depends_on:
       - mongo    
