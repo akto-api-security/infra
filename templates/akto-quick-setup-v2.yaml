@@ -159,7 +159,7 @@ Resources:
       ResourceSignal:    
         Timeout: PT10M
 Outputs:
-  AKTOMONGOCONN:
+  AktoMongoConn:
     Value: !Join 
       - ''
       - - 'mongodb://'
@@ -168,5 +168,5 @@ Outputs:
           - PrivateIp
         - ':27017/admin'
     Description: MongoDB connection String
-  INSTANCEID:
+  InstanceId:
     Value: !Ref AktoMongoInstance
