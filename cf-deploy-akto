@@ -237,12 +237,12 @@ printf "\r%s%s%s%s%s%s%s%s" "$MAGENTA" 'Check out your ' "$BOLD" 'BROWSER' "${NO
 echo
 
 echo ""
-echo "  ${CYAN}Navigate to${NORMAL}:          ${WHITE}${BOLD}http://localhost:8080/login${NORMAL}    or    ${WHITE}${BOLD}[publically_accessible_ip]:8080/login${NORMAL}"
+echo "  ${CYAN}Navigate to${NORMAL}:          ${WHITE}${BOLD}http://localhost:9090/login${NORMAL}    or    ${WHITE}${BOLD}[publically_accessible_ip]:9090/login${NORMAL}"
 echo ""
 
 echo "Akto was installed in ~/akto. It will run in the background until you manually stop it. If Akto stops you can restart it without losing your data. "
 
 if command_present open; then
-  open 'http://localhost:8080/login'
+  open 'http://localhost:9090/login'
 fi
 
