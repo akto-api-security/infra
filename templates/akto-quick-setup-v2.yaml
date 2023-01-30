@@ -3,9 +3,9 @@ Description:
   This template does a quick setup of Akto modules. It sets up Akto dashboard and mongo on a single ec2 instance. If you want a flexible setup, please
   contact support@akto.io.
 Parameters:
-  vpcID: 
+  VpcId: 
     Type: AWS::EC2::VPC::Id
-    Description: Enter VPC Id where Akto EC2 instances will be deployed
+    Description: Enter VPC ID where Akto EC2 instances will be deployed.
     ConstraintDescription: must be an existing vpc
   KeyPair:
     Description: Select the key pair to connect to Akto EC2 instances
@@ -13,7 +13,7 @@ Parameters:
   PrivateSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description:
-      Select a private subnetid where Akto EC2 instances will be deployed
+      Select a private subnetid where Akto EC2 instances will be deployed. This should be in the VPC being given by you.
     ConstraintDescription: must be an existing subnet
   UserEmail:
     Type: String
@@ -68,7 +68,7 @@ Resources:
   AktoMongoSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref vpcID
+      VpcId: !Ref VpcId
       GroupDescription: Enable the ports Mongo and dashboard require (22, 27017, 8080)
       SecurityGroupIngress:
         - IpProtocol: tcp
