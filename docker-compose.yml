@@ -7,7 +7,7 @@ services:
     image: mongo
     restart: on-failure:10
     volumes:
-      - ./data:/data/db
+      - mongodata:/data/db
     ports:
       - "27017:27017"
 
@@ -33,4 +33,5 @@ services:
       - "3000:3000"
     restart: always
 
-    
+volumes:
+  mongodata:
