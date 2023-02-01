@@ -22,47 +22,47 @@ Mappings:
     "af-south-1":
       AMI: "ami-0adee70ff4394e3d5"
     "eu-north-1":
-      AMI: "ami-04e8b0e36ed3403dc"
+      AMI: "ami-09b071757b03d4723"
     "ap-south-1":
-      AMI: "ami-09de362f44ba0a166"
+      AMI: "ami-08e95f43e1c0e53b7"
     "eu-west-3":
-      AMI: "ami-0614433a16ab15878"
+      AMI: "ami-04589c41342e2613f"
     "eu-west-2":
-      AMI: "ami-030770b178fa9d374"
+      AMI: "ami-0dcd9e2a276abc0ac"
     "eu-south-1":
       AMI: "ami-0432f14b68c3e0273"
     "eu-west-1":
-      AMI: "ami-0bba0a4cb75835f71"
+      AMI: "ami-009e0dd1847dddbcc"
     "ap-northeast-3":
-      AMI: "ami-0253beba286f3e848"
+      AMI: "ami-0dff76f9597d7da13"
     "ap-northeast-2":
-      AMI: "ami-0e1d09d8b7c751816"
+      AMI: "ami-0740db9877d3fcc78"
     "me-south-1":
       AMI: "ami-07a68e42e669daed0"
     "ap-northeast-1":
-      AMI: "ami-06ce6680729711877"
+      AMI: "ami-00a7a10fe682e3f1a"
     "sa-east-1":
-      AMI: "ami-0656df2cc0dfd150a"
+      AMI: "ami-03ec3eae43b2559fe"
     "ca-central-1":
-      AMI: "ami-04c12937e87474def"
+      AMI: "ami-00afde4eccc142c5b"
     "ap-east-1":
       AMI: "ami-0b751f901b93720a5"
     "ap-southeast-1":
-      AMI: "ami-0adf622550366ea53"
+      AMI: "ami-028b40a09a2f535c1"
     "ap-southeast-2":
-      AMI: "ami-03b836d87d294e89e"
+      AMI: "ami-071f95d61daa0b2b1"
     "eu-central-1":
-      AMI: "ami-094c442a8e9a67935"
+      AMI: "ami-05fc6266a1cbc7e4f"
     "ap-southeast-3":
       AMI: "ami-0483d92a8124da6c9"
     "us-east-1":
-      AMI: "ami-065efef2c739d613b"
+      AMI: "ami-04f1f1eddf4671470"
     "us-east-2":
-      AMI: "ami-07251f912d2a831a3"
+      AMI: "ami-0976edd9a2911640f"
     "us-west-1":
-      AMI: "ami-09b2f6d85764ec71b"
+      AMI: "ami-06df515bb5632e627"
     "us-west-2":
-      AMI: "ami-0d08ef957f0e4722b"
+      AMI: "ami-0754319c18d2d18bc"
 Resources:
   ## Setting up mongo and dashboard
   AktoMongoSecurityGroup:
@@ -88,7 +88,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId: ami-0b4b5be097655283d
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: m5a.xlarge
         KeyName:
           Ref: KeyPair
