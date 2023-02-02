@@ -20,7 +20,7 @@ Parameters:
 Mappings:
   RegionMap:
     "af-south-1":
-      AMI: "ami-0adee70ff4394e3d5"
+      AMI: "ami-00588ff7d44f0b6e2"
     "eu-north-1":
       AMI: "ami-09b071757b03d4723"
     "ap-south-1":
@@ -30,7 +30,7 @@ Mappings:
     "eu-west-2":
       AMI: "ami-0dcd9e2a276abc0ac"
     "eu-south-1":
-      AMI: "ami-0432f14b68c3e0273"
+      AMI: "ami-05f2de069b1aa09be"
     "eu-west-1":
       AMI: "ami-009e0dd1847dddbcc"
     "ap-northeast-3":
@@ -38,7 +38,7 @@ Mappings:
     "ap-northeast-2":
       AMI: "ami-0740db9877d3fcc78"
     "me-south-1":
-      AMI: "ami-07a68e42e669daed0"
+      AMI: "ami-0393be492a3e99039"
     "ap-northeast-1":
       AMI: "ami-00a7a10fe682e3f1a"
     "sa-east-1":
@@ -46,7 +46,7 @@ Mappings:
     "ca-central-1":
       AMI: "ami-00afde4eccc142c5b"
     "ap-east-1":
-      AMI: "ami-0b751f901b93720a5"
+      AMI: "ami-0bf0e38ae15ed6fc6"
     "ap-southeast-1":
       AMI: "ami-028b40a09a2f535c1"
     "ap-southeast-2":
@@ -54,7 +54,7 @@ Mappings:
     "eu-central-1":
       AMI: "ami-05fc6266a1cbc7e4f"
     "ap-southeast-3":
-      AMI: "ami-0483d92a8124da6c9"
+      AMI: "ami-09b0fede0e885f913"
     "us-east-1":
       AMI: "ami-04f1f1eddf4671470"
     "us-east-2":
