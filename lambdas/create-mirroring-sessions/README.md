@@ -1,1 +1,0 @@
-# create-mirroring-sessions-lambda

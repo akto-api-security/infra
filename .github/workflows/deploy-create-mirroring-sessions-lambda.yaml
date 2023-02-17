@@ -60,7 +60,13 @@ jobs:
       - name: Make zip file
         env:
           ZIP_NAME: ${{ github.event.inputs.Environment == 'staging' && '-staging' || '' }}
-        run: zip -r create-mirror-session${ZIP_NAME}.zip ./
+        run: |
+          mkdir code
+          cp index.js ./code
+          cp package.json ./code
+          cd code
+          npm install
+          zip -r create-mirror-session${ZIP_NAME}.zip ./
       - name: Copy zip file to S3
         if: ${{ github.event.inputs.Environment == 'staging' || github.event.inputs.Environment == 'prod' }}
         run: |
