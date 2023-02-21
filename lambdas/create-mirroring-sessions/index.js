@@ -46,6 +46,31 @@ function calcVxLanId(name) {
   }
   return hash & ((2<<20)-1);
 }
+
+async function retry(promiseFn, maxRetries = 3) {
+    let retryCount = 0;
+    while (true) {
+        try {
+            return await promiseFn();
+        } catch (error) {
+            console.log(error);
+            if (error.code !== "Throttling") {
+                console.log('Not a throttling issue, throwing error')
+                throw error;
+            }
+            if (retryCount >= maxRetries) {
+                console.log('Max retries reached, throwing error')
+                throw error;
+            }
+            const delay = Math.pow(2, retryCount) * 1000;
+            console.log(`Throttling error, retrying in ${delay}ms`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            retryCount++;
+        }
+    }
+}
+
+
 async function getEnisAndPortOfTargetGroup(params, allPorts, eniList) {
     var isError = false;
     var elbv2 = new aws.ELBv2();
@@ -53,7 +78,7 @@ async function getEnisAndPortOfTargetGroup(params, allPorts, eniList) {
     var i = 0,
         j = 0,
         k = 0;
-    var targetGroups = await elbv2.describeTargetGroups(params).promise().catch((err) => {
+    var targetGroups = await retry(() => elbv2.describeTargetGroups(params).promise()).catch((err) => {
         console.error(err);
         isError = true;
     });
@@ -66,7 +91,7 @@ async function getEnisAndPortOfTargetGroup(params, allPorts, eniList) {
             params = {
                 TargetGroupArn: targetGroups.TargetGroups[j].TargetGroupArn
             }
-            var backends = await elbv2.describeTargetHealth(params).promise().catch((err) => {
+            var backends = await retry(() => elbv2.describeTargetHealth(params).promise()).catch((err) => {
                 console.error(err);
                 isError = true;
             });
@@ -88,7 +113,7 @@ async function getEnisAndPortOfTargetGroup(params, allPorts, eniList) {
                                     Values: slicedInstanceIdList
                                 }]
                             };
-                            var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
+                            var enis = await retry(() => ec2.describeNetworkInterfaces(params).promise()).catch((err) => {
                                 console.error(err);
                                 isError = true;
                             });
@@ -121,7 +146,7 @@ async function getEnisAndPortOfTargetGroup(params, allPorts, eniList) {
                                     Values: slicedList
                                 }]
                             };
-                            var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => {
+                            var enis = await retry(() => ec2.describeNetworkInterfaces(params).promise()).catch((err) => {
                                 console.error(err);
                                 isError = true;
                             });
@@ -158,7 +183,7 @@ async function updateTrafficMirroringRule(allPorts) {
         }]
     }
     isError = false;
-    var filterList = await ec2.describeTrafficMirrorFilters(params).promise().catch((err) => {
+    var filterList = await retry(() => ec2.describeTrafficMirrorFilters(params).promise()).catch((err) => {
         console.error(err);
         isError = true;
     });
@@ -309,7 +334,7 @@ async function updateMirroringSessions(eniList, failedEnis,
             }
         ]
     }
-    var mirrorSession = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
+    var mirrorSession = await retry(() => ec2.describeTrafficMirrorSessions(params).promise()).catch((err) => {
         console.error("error describing traffic mirror sessions", err);
         isError = true;
     });
@@ -387,7 +412,7 @@ async function createTrafficMirrorSessionForLBs(allPorts, eniList) {
             LoadBalancerNames: elbNames
         };
         console.log('elbv1 describeLoadBalancers request', params)
-        var data = await elb.describeLoadBalancers(params).promise().catch((err) => {
+        var data = await retry(() => elb.describeLoadBalancers(params).promise()).catch((err) => {
             console.error(err);
             isError = true;
         });
@@ -423,7 +448,7 @@ async function createTrafficMirrorSessionForLBs(allPorts, eniList) {
                 }
                 console.log("elb eni params", JSON.stringify(params));
                 if (params.Filters[0].Values.length > 0) {
-                    var enis = await ec2.describeNetworkInterfaces(params).promise().catch((err) => { // to check
+                    var enis = await retry(() => ec2.describeNetworkInterfaces(params).promise()).catch((err) => { // to check
                         console.error(err);
                         isError = true;
                     });
@@ -452,7 +477,7 @@ async function createTrafficMirrorSessionForLBs(allPorts, eniList) {
         };
         console.log('elbv2 describeLoadBalancers request', params)
         isError = false;
-        data = await elbv2.describeLoadBalancers(params).promise().catch((err) => {
+        data = await retry(() => elbv2.describeLoadBalancers(params).promise()).catch((err) => {
             console.error(err);
             isError = true;
         });
@@ -491,7 +516,7 @@ async function createMirroringSession(eni, sessionNumber, filterId, successEnis,
     });
     if (promise != undefined) {
         // get vpc cidr
-        var vpcPromise = await ec2.describeVpcs().promise().catch((err1) => {
+        var vpcPromise = await retry(() => ec2.describeVpcs().promise()).catch((err1) => {
           console.error(err1)
         })
         let cidrBlock = []
@@ -510,7 +535,7 @@ async function createMirroringSession(eni, sessionNumber, filterId, successEnis,
 async function deleteTrafficMirrorSessionInternal(params) {
     var isError = false;
     var ec2 = new aws.EC2();
-    var data = await ec2.describeTrafficMirrorSessions(params).promise().catch((err) => {
+    var data = await retry(() => ec2.describeTrafficMirrorSessions(params).promise()).catch((err) => {
         console.error(err);
         isError = true;
     });
