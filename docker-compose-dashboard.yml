@@ -86,3 +86,5 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 900
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
