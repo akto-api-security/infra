@@ -85,7 +85,7 @@ Resources:
   GetAktoSetupDetails:
     Type: 'AWS::Lambda::Function'
     Properties:
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 60
       Role: !GetAtt 
         - GetAktoSetupDetailsLambdaBasicExecutionRole
@@ -125,7 +125,7 @@ Resources:
     Properties:
       Description: Look up info from a VPC
       Handler: index.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 30
       Role: !GetAtt 
         - GetVpcDetailsLambdaRole
@@ -269,7 +269,7 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Handler: index.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 30
       Role: !GetAtt 
         - InstanceRefreshHandlerLambdaRole
@@ -494,7 +494,7 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Handler: index.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 30
       Role: !GetAtt 
         - InstanceRefreshHandlerLambdaRole
@@ -520,7 +520,7 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Handler: index.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Timeout: 30
       Role: !GetAtt 
         - InstanceRefreshHandlerLambdaRole
