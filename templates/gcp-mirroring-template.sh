@@ -68,6 +68,7 @@ create_resources() {
   echo "Will be creating Akto resources with prefix $PREFIX"
     set_names
 
+    create_firewall_rule_runtime
     create_instance_mongo
     create_health_checks
     create_load_balancer
@@ -92,6 +93,7 @@ delete_resources() {
     delete_health_checks
     delete_instance_mongo
     delete_instance_dashboard
+    delete_firewall_rule_runtime
     
 }
 
@@ -106,6 +108,30 @@ set_names() {
   akto_instance_dashboard="${PREFIX}-instance-dashboard"
 }
 
+create_firewall_rule_runtime(){
+  echo -n "Creating akto-allow-8000 firewall rule"
+  args=(compute firewall-rules create akto-allow-8000
+    --network "$NETWORK"
+    --allow tcp:8000
+    --source-ranges=35.191.0.0/16,130.211.0.0/22
+    --target-tags=akto-allow-8000
+  )
+  err=$(gcloud "${args[@]}" 2>&1 >/dev/null)
+    check_error "$err" 
+}
+
+delete_firewall_rule_runtime(){
+  echo -n "deleting"
+  args=(compute firewall-rules describe akto-allow-8000)
+  found=$(gcloud "${args[@]}" 2>/dev/null)
+  if [ "$found" ]
+  then
+    echo -n "Deleting akto-allow-8000 firewall rule"
+    args=(compute firewall-rules delete akto-allow-8000)
+    err=$(gcloud "${args[@]}" 2>&1 >/dev/null)
+    check_error "$err" 
+  fi
+}
 
 create_instance_template() {
     echo -n "Creating $akto_instance_template"
@@ -119,6 +145,7 @@ create_instance_template() {
     --region "$REGION" 
     --machine-type "n2-standard-4" 
     --network-interface "network=$NETWORK,subnet=$SUBNET,network-tier=PREMIUM,no-address" 
+    --tags=akto-allow-8000
     --maintenance-policy "MIGRATE" 
     --scopes "storage-ro,logging-write,monitoring-write,service-control,service-management,trace"
     --create-disk "auto-delete=yes,boot=yes,image=projects/debian-cloud/global/images/debian-10-buster-v20220317,mode=rw,size=30,type=pd-balanced" 
