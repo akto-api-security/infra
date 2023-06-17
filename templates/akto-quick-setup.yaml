@@ -146,12 +146,7 @@ Resources:
             )
             vpcId = subnets['Subnets'][0]['VpcId']
 
-            vpcs = ec2.describe_vpcs(
-              VpcIds=[vpcId]
-            )
-
             return {
-              'CidrBlock': vpcs['Vpcs'][0]['CidrBlock'],
               'VpcId': vpcId                 
             }
           
@@ -189,21 +184,7 @@ Resources:
         - CustomSourceGetVpcDetails
         - VpcId
       GroupDescription: Enable the ports Mongo requires (22, 27017)
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 
-            Fn::GetAtt:
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: tcp
-          FromPort: 27017
-          ToPort: 27017
-          CidrIp: 
-            Fn::GetAtt:
-            - CustomSourceGetVpcDetails
-            - CidrBlock
+      SecurityGroupIngress: []
       SecurityGroupEgress: []
   AktoMongoLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -291,21 +272,7 @@ Resources:
           - CustomSourceGetVpcDetails
           - VpcId
       GroupDescription: Enable the ports Akto requires (22, 8080)
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 
-            Fn::GetAtt:
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          CidrIp: 
-            Fn::GetAtt:
-            - CustomSourceGetVpcDetails
-            - CidrBlock
+      SecurityGroupIngress: []
       SecurityGroupEgress: []
   AktoDashboardAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -464,6 +431,72 @@ Resources:
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
+  ConfigureSecurityGroupsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Configure Security Groups for Mongo and Akto Dashboard
+      Handler: lambda.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - ConfigureSecurityGroupsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID: !Ref PrivateSubnetId
+          MONGO_SECURITY_GROUP_ID: !Ref AktoMongoSecurityGroup
+          DASHBOARD_SECURITY_GROUP_ID: !Ref AktoDashboardSecurityGroup
+          MODE: DASHBOARD
+      Code:
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: templates/configure_security_groups.zip
+  CustomSourceConfigureSecurityGroupsLambda:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - ConfigureSecurityGroupsLambda
+        - Arn
+  ConfigureSecurityGroupsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: DescribeAssetsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:AuthorizeSecurityGroupIngress
+                Resource: 
+                  - Fn::Sub: 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoMongoSecurityGroup}'
+                  - Fn::Sub: 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoDashboardSecurityGroup}'
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
 Outputs:
   AktoLBDashboard:
     Value: !Join 
