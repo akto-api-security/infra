@@ -12,50 +12,50 @@ Parameters:
     Type: String
 Mappings:
   RegionMap:
-    "af-south-1":
-      AMI: "ami-093ca241e4c72c205"
-    "eu-north-1":
-      AMI: "ami-0f58e72599cb99a79"
-    "ap-south-1":
-      AMI: "ami-0400aca7799d8cf19"
-    "eu-west-3":
-      AMI: "ami-064c70d04ad799d5e"
-    "eu-west-2":
-      AMI: "ami-0dfe6158087b5c0ac"
-    "eu-south-1":
-      AMI: "ami-07b2af763a8b958f3"
-    "eu-west-1":
-      AMI: "ami-047aad752a426ed48"
-    "ap-northeast-3":
-      AMI: "ami-0cffa2172948e071e"
-    "ap-northeast-2":
-      AMI: "ami-087af0192368bc87c"
-    "me-south-1":
-      AMI: "ami-0a31e56929248acca"
-    "ap-northeast-1":
-      AMI: "ami-0828596b82405edd7"
-    "sa-east-1":
-      AMI: "ami-0df67b3c17f090c24"
-    "ca-central-1":
-      AMI: "ami-0eb3718c42cb70e52"
-    "ap-east-1":
-      AMI: "ami-0e992f1e63814db10"
-    "ap-southeast-1":
-      AMI: "ami-0ba98499caf94125a"
-    "ap-southeast-2":
-      AMI: "ami-0849cc8fe4ceaf988"
-    "eu-central-1":
-      AMI: "ami-0f7585ae7a0d9a25a"
-    "ap-southeast-3":
-      AMI: "ami-0cf40308729b83366"
-    "us-east-1":
-      AMI: "ami-0d52ddcdf3a885741"
-    "us-east-2":
-      AMI: "ami-04148302a14f7d12b"
-    "us-west-1":
-      AMI: "ami-0ee3e1e65adeef858"
-    "us-west-2":
-      AMI: "ami-0ec021424fb596d6c"
+    af-south-1:
+      AMI: ami-093ca241e4c72c205
+    eu-north-1:
+      AMI: ami-0f58e72599cb99a79
+    ap-south-1:
+      AMI: ami-0400aca7799d8cf19
+    eu-west-3:
+      AMI: ami-064c70d04ad799d5e
+    eu-west-2:
+      AMI: ami-0dfe6158087b5c0ac
+    eu-south-1:
+      AMI: ami-07b2af763a8b958f3
+    eu-west-1:
+      AMI: ami-047aad752a426ed48
+    ap-northeast-3:
+      AMI: ami-0cffa2172948e071e
+    ap-northeast-2:
+      AMI: ami-087af0192368bc87c
+    me-south-1:
+      AMI: ami-0a31e56929248acca
+    ap-northeast-1:
+      AMI: ami-0828596b82405edd7
+    sa-east-1:
+      AMI: ami-0df67b3c17f090c24
+    ca-central-1:
+      AMI: ami-0eb3718c42cb70e52
+    ap-east-1:
+      AMI: ami-0e992f1e63814db10
+    ap-southeast-1:
+      AMI: ami-0ba98499caf94125a
+    ap-southeast-2:
+      AMI: ami-0849cc8fe4ceaf988
+    eu-central-1:
+      AMI: ami-0f7585ae7a0d9a25a
+    ap-southeast-3:
+      AMI: ami-0cf40308729b83366
+    us-east-1:
+      AMI: ami-0d52ddcdf3a885741
+    us-east-2:
+      AMI: ami-04148302a14f7d12b
+    us-west-1:
+      AMI: ami-0ee3e1e65adeef858
+    us-west-2:
+      AMI: ami-0ec021424fb596d6c
 Resources:
   GetAktoSetupDetailsLambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -87,7 +87,7 @@ Resources:
     Properties:
       Runtime: nodejs16.x
       Timeout: 60
-      Role: !GetAtt 
+      Role: !GetAtt
         - GetAktoSetupDetailsLambdaBasicExecutionRole
         - Arn
       Handler: index.handler
@@ -127,7 +127,7 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Timeout: 30
-      Role: !GetAtt 
+      Role: !GetAtt
         - GetVpcDetailsLambdaRole
         - Arn
       Environment:
@@ -148,16 +148,12 @@ Resources:
               var subnets = await ec2.describeSubnets(params).promise().catch(err => {
                  console.error(err);
               });
-              var vpcId = subnets['Subnets'][0]['VpcId'];
-              var vpcs = await ec2.describeVpcs({VpcIds: [vpcId]}).promise().catch(err => {
-                 console.error(err);
-              });
-              await response.send(event, context, 'SUCCESS', {CidrBlock: vpcs['Vpcs'][0]['CidrBlock'], VpcId: vpcId})
+              await response.send(event, context, 'SUCCESS', {VpcId: subnets['Subnets'][0]['VpcId']})
           };
   CustomSourceGetVpcDetails:
     Type: 'AWS::CloudFormation::CustomResource'
     Properties:
-      ServiceToken: !GetAtt 
+      ServiceToken: !GetAtt
         - GetVpcDetailsLambda
         - Arn
   IamInstanceProfile:
@@ -169,28 +165,16 @@ Resources:
   AktoContextAnalyzerSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      VpcId: !GetAtt 
+      VpcId: !GetAtt
         - CustomSourceGetVpcDetails
         - VpcId
       GroupDescription: 'Enable the ports Akto requires (22, 9092)'
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: tcp
-          FromPort: 9092
-          ToPort: 9092
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
+      SecurityGroupIngress: []
       SecurityGroupEgress: []
   AktoContextAnalyzerASGLaunchConfiguration:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
-      ImageId: !FindInMap 
+      ImageId: !FindInMap
         - RegionMap
         - !Ref 'AWS::Region'
         - AMI
@@ -208,7 +192,7 @@ Resources:
             Encrypted: true
       MetadataOptions:
         HttpTokens: required
-      UserData: !Base64 
+      UserData: !Base64
         'Fn::Join':
           - |+
 
@@ -242,7 +226,7 @@ Resources:
               export TOKEN=$(curl -X PUT
               'http://169.254.169.254/latest/api/token' -H
               'X-aws-ec2-metadata-token-ttl-seconds: 600')
-            - !Join 
+            - !Join
               - ':'
               - - >-
                   export AKTO_CURRENT_INSTANCE_IP=$(curl -H
@@ -271,7 +255,7 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Timeout: 30
-      Role: !GetAtt 
+      Role: !GetAtt
         - InstanceRefreshHandlerLambdaRole
         - Arn
       Code:
@@ -285,12 +269,12 @@ Resources:
                 MinHealthyPercentage: 0
               }
             };
-            
+          
             autoscaling.startInstanceRefresh(params, function(err, data) {
               if(err) { console.log(err) }
               else { console.log(data) }
             })
-          };      
+          };
   RefreshHandlerLambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -308,55 +292,31 @@ Resources:
             Statement:
               - Effect: Allow
                 Resource:
-                  - !GetAtt 
+                  - !GetAtt
                     - DashboardInstanceRefreshHandler
                     - Arn
-                  - !GetAtt 
+                  - !GetAtt
                     - TrafficMirroringInstanceRefreshHandler
                     - Arn
-                  - !GetAtt 
+                  - !GetAtt
                     - AktoContextAnalyzerInstanceRefreshHandler
                     - Arn
                 Action: 'lambda:InvokeFunction'
   AktoSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      VpcId: !GetAtt 
+      VpcId: !GetAtt
         - CustomSourceGetVpcDetails
         - VpcId
       GroupDescription: 'Enable the ports Akto requires (22, 4789, 8000, 9092)'
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: tcp
-          FromPort: 9092
-          ToPort: 9092
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: udp
-          FromPort: 4789
-          ToPort: 4789
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
-        - IpProtocol: tcp
-          FromPort: 8000
-          ToPort: 8000
-          CidrIp: !GetAtt 
-            - CustomSourceGetVpcDetails
-            - CidrBlock
+      SecurityGroupIngress: []
       SecurityGroupEgress: []
   AktoASGLaunchConfiguration:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     DependsOn:
       - AktoNLB
     Properties:
-      ImageId: !FindInMap 
+      ImageId: !FindInMap
         - RegionMap
         - !Ref 'AWS::Region'
         - AMI
@@ -375,7 +335,7 @@ Resources:
             Encrypted: true
       MetadataOptions:
         HttpTokens: required
-      UserData: !Base64 
+      UserData: !Base64
         'Fn::Join':
           - |+
 
@@ -459,7 +419,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetType: instance
-      VpcId: !GetAtt 
+      VpcId: !GetAtt
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
@@ -477,7 +437,7 @@ Resources:
       HealthCheckTimeoutSeconds: 6
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      VpcId: !GetAtt 
+      VpcId: !GetAtt
         - CustomSourceGetVpcDetails
         - VpcId
       Targets: []
@@ -496,7 +456,7 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Timeout: 30
-      Role: !GetAtt 
+      Role: !GetAtt
         - InstanceRefreshHandlerLambdaRole
         - Arn
       Code:
@@ -510,7 +470,7 @@ Resources:
                 MinHealthyPercentage: 0
               }
             };
-            
+          
             autoscaling.startInstanceRefresh(params, function(err, data) {
               if(err) { console.log(err) }
               else { console.log(data) }
@@ -522,7 +482,7 @@ Resources:
       Handler: index.handler
       Runtime: nodejs16.x
       Timeout: 30
-      Role: !GetAtt 
+      Role: !GetAtt
         - InstanceRefreshHandlerLambdaRole
         - Arn
       Code:
@@ -536,7 +496,7 @@ Resources:
                 MinHealthyPercentage: 0
               }
             };
-            
+          
             autoscaling.startInstanceRefresh(params, function(err, data) {
               if(err) { console.log(err) }
               else { console.log(data) }
@@ -578,10 +538,78 @@ Resources:
                   - 'ec2:DescribeLaunchTemplates'
                   - 'ec2:RunInstances'
                 Resource: '*'
+  ConfigureSecurityGroupsLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: >-
+        Configure Security Groups for Runtime processor and Context analyzer
+        instances
+      Handler: lambda.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Role: !GetAtt
+        - ConfigureSecurityGroupsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID: !Ref SubnetId
+          CONTEXT_ANALYZER_SECURITY_GROUP_ID: !Ref AktoContextAnalyzerSecurityGroup
+          RUNTIME_PROCESSOR_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
+          MODE: RUNTIME
+      Code:
+        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
+        S3Key: templates/configure_security_groups.zip
+  CustomSourceConfigureSecurityGroupsLambda:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt
+        - ConfigureSecurityGroupsLambda
+        - Arn
+  ConfigureSecurityGroupsLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: DescribeAssetsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeVpcs'
+                  - 'ec2:DescribeSubnets'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource:
+                  - !Sub >-
+                    arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
+                  - !Sub >-
+                    arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoContextAnalyzerSecurityGroup}
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
 Outputs:
   AktoNLB:
     Description: The IP address of the AktoNLB
-    Value: !GetAtt 
+    Value: !GetAtt
       - AktoNLB
       - DNSName
     Export:
