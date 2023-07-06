@@ -105,7 +105,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/segregation_2.zip
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/gcp_watchtower.zip
     log_step 'unpacking...'
     unzip master.zip
     mv infra-feature-segregation_2 infra
