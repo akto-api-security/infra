@@ -4,6 +4,8 @@ services:
   mongo:
     container_name: mongo
     image: mongo
+    logging:
+      driver: none
     restart: on-failure:10
     volumes:
       - ./data:/data/db
