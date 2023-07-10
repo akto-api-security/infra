@@ -108,7 +108,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/enable_docker_process_on_restart.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-feature-quick-setup infra
+    mv infra-feature-enable_docker_process_on_restart infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
