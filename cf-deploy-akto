@@ -105,10 +105,10 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     fi
   else
     log_step 'downloading...'
-    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/gcp_watchtower.zip
+    curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/segregation_2.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-feature-gcp_watchtower infra
+    mv infra-feature-segregation_2 infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.
