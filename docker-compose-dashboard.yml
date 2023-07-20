@@ -63,10 +63,3 @@ services:
       - ./data-kafka-secrets:/etc/kafka/secrets       
     depends_on:
       - zoo1
-
-  akto-api-security-runtime:
-    image: aktosecurity/akto-api-security-runtime:akto_staging1_feature_auth0_integration
-    env_file: ./docker-dashboard.env
-    restart: always
-    depends_on:
-      - kafka1
