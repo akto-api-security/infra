@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:${DOCKER_TAG}
+    image: aktosecurity/akto-api-security-dashboard:akto_staging1_feature_auth0_integration
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -11,7 +11,7 @@ services:
       - kafka1
 
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:${DOCKER_TAG}
+    image: aktosecurity/akto-api-testing:akto_staging1_feature_auth0_integration
     env_file: ./docker-dashboard.env
     restart: always
 
@@ -65,7 +65,7 @@ services:
       - zoo1
 
   akto-api-security-runtime:
-    image: aktosecurity/akto-api-security-runtime:${DOCKER_TAG}
+    image: aktosecurity/akto-api-security-runtime:akto_staging1_feature_auth0_integration
     env_file: ./docker-dashboard.env
     restart: always
     depends_on:
