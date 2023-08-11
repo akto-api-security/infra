@@ -81,6 +81,6 @@ services:
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 900
+    env_file: ./watchtower.env
     labels:
       com.centurylinklabs.watchtower.enable: "false"
