@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: akto-api-security-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: akto-api-security-dashboard
+  template:
+    metadata:
+      labels:
+        app: akto-api-security-dashboard
+    spec:
+
+      containers:
+        - env:
+            - name: AKTO_ACCOUNT_NAME
+              value: Helios
+            - name: AKTO_CONFIG_NAME
+              value: staging
+            - name: AKTO_INSTANCE_TYPE
+              value: DASHBOARD
+            - name: AKTO_KAFKA_BROKER_MAL
+              value: localhost:29092
+            - name: AKTO_KAFKA_BROKER_URL
+              value: 127.0.0.1:29092
+            - name: AKTO_KAFKA_GROUP_ID_CONFIG
+              value: asdf
+            - name: AKTO_KAFKA_MAX_POLL_RECORDS_CONFIG
+              value: "100"
+            - name: AKTO_KAFKA_TOPIC_NAME
+              value: akto.api.logs
+            - name: AKTO_TRAFFIC_BATCH_SIZE
+              value: "100"
+            - name: AKTO_TRAFFIC_BATCH_TIME_SECS
+              value: "10"
+            - name: PUPPETEER_REPLAY_SERVICE_URL
+              value: http://akto-puppeteer-replay:3000
+            - name: AKTO_MONGO_CONN
+              value: mongodb://mongo:27017/admini
+          image: aktosecurity/akto-api-security-dashboard:mono_staging1_feature_rootless
+          name: akto-api-security-dashboard
+          ports:
+            - containerPort: 8080
+          imagePullPolicy: Always
+          resources: {}
+
+        - env:
+            - name: AKTO_ACCOUNT_NAME
+              value: Helios
+            - name: AKTO_CONFIG_NAME
+              value: staging
+            - name: AKTO_INSTANCE_TYPE
+              value: DASHBOARD
+            - name: AKTO_KAFKA_BROKER_MAL
+              value: localhost:29092
+            - name: AKTO_KAFKA_BROKER_URL
+              value: 127.0.0.1:29092
+            - name: AKTO_KAFKA_GROUP_ID_CONFIG
+              value: asdf
+            - name: AKTO_KAFKA_MAX_POLL_RECORDS_CONFIG
+              value: "100"
+            - name: AKTO_KAFKA_TOPIC_NAME
+              value: akto.api.logs
+            - name: AKTO_TRAFFIC_BATCH_SIZE
+              value: "100"
+            - name: AKTO_TRAFFIC_BATCH_TIME_SECS
+              value: "10"
+            - name: PUPPETEER_REPLAY_SERVICE_URL
+              value: http://akto-puppeteer-replay:3000
+            - name: AKTO_MONGO_CONN
+              value: mongodb://mongo:27017/admini
+          image: aktosecurity/akto-api-security-runtime:mono_staging1_feature_rootless
+          name: akto-api-security-runtime
+          imagePullPolicy: Always
+          resources: {}
+
+        - env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_SERVERS
+              value: zoo1:2888:3888
+            - name: ZOOKEEPER_SERVER_ID
+              value: "1"
+            - name: KAFKA_OPTS
+              value: "-Dzookeeper.admin.enableServer=false"
+          image: confluentinc/cp-zookeeper:6.2.11-1-ubi8
+          name: zoo1
+          ports:
+            - containerPort: 2181
+          restartPolicy: Always
+
+        - env:
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_CLEANUP_POLICY
+              value: delete
+            - name: KAFKA_CREATE_TOPICS
+              value: akto.api.logs:3:3
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: LISTENER_DOCKER_EXTERNAL_LOCALHOST
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: LISTENER_DOCKER_EXTERNAL_LOCALHOST:PLAINTEXT
+            - name: KAFKA_LOG_CLEANER_ENABLE
+              value: "true"
+            - name: KAFKA_LOG_RETENTION_BYTES
+              value: "10737418240"
+            - name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS
+              value: "60000"
+            - name: KAFKA_LOG_RETENTION_HOURS
+              value: "5"
+            - name: KAFKA_LOG_SEGMENT_BYTES
+              value: "104857600"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: 127.0.0.1:2181
+          image: confluentinc/cp-kafka:6.2.11-1-ubi8
+          name: kafka1
+          ports:
+            - containerPort: 9092
+            - containerPort: 19092
+            - containerPort: 29092
+            - containerPort: 9999
+          resources: {}
+
+
+
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: akto-api-security-dashboard
+spec:
+  selector:
+    app: akto-api-security-dashboard
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: LoadBalancer
