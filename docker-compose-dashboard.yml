@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:latest
+    image: public.ecr.aws/p7q3h0z2/akto-api-context-dashboard:latest
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -11,7 +11,7 @@ services:
       - kafka1
 
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:latest
+    image: public.ecr.aws/p7q3h0z2/akto-api-testing:latest
     env_file: ./docker-dashboard.env
     restart: always
 
