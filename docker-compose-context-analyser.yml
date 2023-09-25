@@ -55,7 +55,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   akto-api-security-context-analyser:
-    image: aktosecurity/akto-api-context-analyzer:latest
+    image: public.ecr.aws/p7q3h0z2/akto-api-context-analyzer:latest
     env_file: ./docker-context-analyser.env
     mem_limit: 4g    
     restart: always
@@ -63,7 +63,7 @@ services:
       - kafka1
 
   akto-hello-world:
-    image: hotavneesh/hello-world-server:latest
+    image: public.ecr.aws/p7q3h0z2/hello-world-server:latest
     restart: always
     ports: 
       - "8000:8000"
