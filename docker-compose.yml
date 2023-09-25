@@ -17,8 +17,6 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_SERVERS: zoo1:2888:3888
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
@@ -51,8 +49,6 @@ services:
       - ./data-kafka-secrets:/etc/kafka/secrets       
     depends_on:
       - zoo1
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
 
   mongo:
     container_name: mongo
@@ -62,8 +58,6 @@ services:
       - ./data:/data/db
     ports:
       - "27017:27017"
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
 
   akto-api-security-dashboard:
     image: public.ecr.aws/p7q3h0z2/akto-api-security-dashboard:latest
@@ -92,12 +86,3 @@ services:
     depends_on:
       - kafka1
     network_mode: host
-
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    env_file: ./watchtower.env
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
-
