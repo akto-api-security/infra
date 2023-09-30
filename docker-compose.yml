@@ -60,7 +60,7 @@ services:
       - "27017:27017"
 
   akto-api-security-dashboard:
-    image: public.ecr.aws/p7q3h0z2/akto-api-security-dashboard:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker.env
     restart: always
     mem_limit: 4g
@@ -70,7 +70,7 @@ services:
       - mongo
 
   akto-api-security-runtime:
-    image: public.ecr.aws/p7q3h0z2/akto-api-security-runtime:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker.env
     restart: always
     mem_limit: 4g
@@ -79,7 +79,7 @@ services:
       - mongo
   
   akto-api-security-mirror-api-logging:
-    image: public.ecr.aws/p7q3h0z2/mirror-api-logging:local
+    image: public.ecr.aws/aktosecurity/mirror-api-logging:local
     env_file: ./docker.env
     restart: always
     mem_limit: 4g
