@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: public.ecr.aws/p7q3h0z2/akto-api-security-dashboard:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -11,7 +11,7 @@ services:
       - kafka1
 
   akto-api-security-testing:
-    image: public.ecr.aws/p7q3h0z2/akto-api-testing:latest
+    image: public.ecr.aws/aktosecurity/akto-api-testing:latest
     env_file: ./docker-dashboard.env
     restart: always
 
@@ -69,7 +69,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   akto-api-security-runtime:
-    image: public.ecr.aws/p7q3h0z2/akto-api-security-runtime:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker-dashboard.env
     mem_limit: 4g
     restart: always
@@ -77,7 +77,7 @@ services:
       - kafka1
     
   akto-puppeteer-replay:
-    image: public.ecr.aws/p7q3h0z2/akto-puppeteer-replay:latest
+    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
     ports:
       - "3000:3000"
     restart: always
