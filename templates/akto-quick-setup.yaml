@@ -327,7 +327,7 @@ Resources:
           Arn: !GetAtt IamInstanceProfile.Arn
         MetadataOptions:
           HttpTokens: required
-          HttpPutResponseHopLimit: 2     
+          HttpPutResponseHopLimit: 2
         BlockDeviceMappings:
           - DeviceName: "/dev/xvda"
             Ebs:
