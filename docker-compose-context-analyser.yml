@@ -3,7 +3,7 @@ version: '2'
 services:
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: zoo1
     user: "0"  
     volumes:
@@ -22,7 +22,7 @@ services:
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: kafka1
     user: "0"
     ports:
@@ -70,6 +70,7 @@ services:
 
   watchtower:
     image: containrrr/watchtower
+    restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     env_file: ./watchtower.env
