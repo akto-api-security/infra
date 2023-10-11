@@ -3,7 +3,7 @@ version: '2'
 services:
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: zoo1
     user: "0"  
     volumes:
@@ -20,7 +20,7 @@ services:
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: kafka1
     user: "0"
     ports:
@@ -53,7 +53,7 @@ services:
   mongo:
     container_name: mongo
     image: mongo
-    restart: on-failure:10
+    restart: always
     volumes:
       - ./data:/data/db
     ports:

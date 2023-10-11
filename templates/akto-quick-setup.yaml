@@ -224,6 +224,7 @@ Resources:
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
                 - export COMPOSE_FILE=docker-compose-mongo.yml
+                - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
@@ -326,7 +327,7 @@ Resources:
           Arn: !GetAtt IamInstanceProfile.Arn
         MetadataOptions:
           HttpTokens: required
-          HttpPutResponseHopLimit: 2     
+          HttpPutResponseHopLimit: 2
         BlockDeviceMappings:
           - DeviceName: "/dev/xvda"
             Ebs:
@@ -348,6 +349,7 @@ Resources:
                 - sudo dockerd&
                 - sudo mkdir -p /opt/aws/bin
                 - export COMPOSE_FILE=docker-compose-dashboard.yml
+                - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
