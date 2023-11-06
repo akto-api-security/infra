@@ -13,7 +13,6 @@ spec:
       labels:
         app: juiceshop-${SETUP_SUFFIX} 
     spec:
-
       containers:
         - env:
           image: hotavneesh/juiceshop 
@@ -22,21 +21,31 @@ spec:
             - containerPort: 3000
           imagePullPolicy: Always
           resources: {}
-
-
+        - name: mirror-api-logging
+          image: aktosecurity/mirror-api-logging:k8s_agent
+          env: 
+            - name: AKTO_TRAFFIC_BATCH_TIME_SECS
+              value: "10"
+            - name: AKTO_TRAFFIC_BATCH_SIZE
+              value: "100"
+            - name: AKTO_INFRA_MIRRORING_MODE
+              value: "gcp"
+            - name: AKTO_KAFKA_BROKER_MAL
+              value: "akto-api-security-runtime-${SETUP_SUFFIX}.dev.svc.cluster.local:9092"
+            - name: AKTO_MONGO_CONN
+              value: "mongodb://mongo-${SETUP_SUFFIX}:27017/admini"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: juiceshop-${SETUP_SUFFIX} 
+  name: juiceshop-${SETUP_SUFFIX}
   namespace: dev
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
 spec:
   selector:
-    app: juiceshop-${SETUP_SUFFIX} 
+    app: juiceshop-${SETUP_SUFFIX}
   ports:
     - port: 3000
       targetPort: 3000
   type: LoadBalancer
-
