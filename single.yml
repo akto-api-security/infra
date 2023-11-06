@@ -101,6 +101,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: akto-api-security-testing-${SETUP_SUFFIX}
+  namespace: dev
 spec:
   replicas: 1
   selector:
