@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juiceshop-${SETUP_SUFFIX}
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juiceshop-${SETUP_SUFFIX} 
+  template:
+    metadata:
+      labels:
+        app: juiceshop-${SETUP_SUFFIX} 
+    spec:
+
+      containers:
+        - env:
+          image: hotavneesh/juiceshop 
+          name: juiceshop 
+          ports:
+            - containerPort: 3000
+          imagePullPolicy: Always
+          resources: {}
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juiceshop-${SETUP_SUFFIX} 
+  namespace: dev
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  selector:
+    app: juiceshop-${SETUP_SUFFIX} 
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: LoadBalancer
+
