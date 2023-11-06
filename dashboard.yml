@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: akto-api-security-dashboard-${SETUP_SUFFIX}
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: akto-api-security-dashboard-${SETUP_SUFFIX}
+  template:
+    metadata:
+      labels:
+        app: akto-api-security-dashboard-${SETUP_SUFFIX}
+    spec:
+
+      containers:
+        - env:
+            - name: AKTO_ACCOUNT_NAME
+              value: Helios
+            - name: AKTO_CONFIG_NAME
+              value: staging
+            - name: AKTO_INSTANCE_TYPE
+              value: DASHBOARD
+            - name: AKTO_KAFKA_BROKER_MAL
+              value: localhost:29092
+            - name: AKTO_KAFKA_BROKER_URL
+              value: 127.0.0.1:29092
+            - name: AKTO_KAFKA_GROUP_ID_CONFIG
+              value: asdf
+            - name: AKTO_KAFKA_MAX_POLL_RECORDS_CONFIG
+              value: "100"
+            - name: AKTO_KAFKA_TOPIC_NAME
+              value: akto.api.logs
+            - name: AKTO_TRAFFIC_BATCH_SIZE
+              value: "100"
+            - name: AKTO_TRAFFIC_BATCH_TIME_SECS
+              value: "10"
+            - name: PUPPETEER_REPLAY_SERVICE_URL
+              value: http://akto-puppeteer-replay:3000
+            - name: AKTO_MONGO_CONN
+              value: mongodb://mongo-${SETUP_SUFFIX}:27017/admini
+          image: aktosecurity/akto-api-security-dashboard:mono_staging1_feature_rootless
+          name: akto-api-security-dashboard
+          ports:
+            - containerPort: 8080
+          imagePullPolicy: Always
+          resources: {}
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: akto-api-security-dashboard-${SETUP_SUFFIX}
+  namespace: dev
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  selector:
+    app: akto-api-security-dashboard-${SETUP_SUFFIX}
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+
