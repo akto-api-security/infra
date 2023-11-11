@@ -73,12 +73,15 @@ spec:
               value: http://akto-puppeteer-replay:3000
             - name: AKTO_MONGO_CONN
               value: mongodb://mongo-${SETUP_SUFFIX}:27017/admini
-          image: aktosecurity/akto-api-security-dashboard:mono_staging1_feature_rootless
+          image: aktosecurity/akto-api-security-dashboard:${SETUP_SUFFIX}
           name: akto-api-security-dashboard
           ports:
             - containerPort: 8080
           imagePullPolicy: Always
-          resources: {}
+          resources: 
+            requests: 
+              cpu: "2"
+              memory: "4Gi"
 
 
 ---
@@ -138,7 +141,7 @@ spec:
               value: http://akto-puppeteer-replay:3000
             - name: AKTO_MONGO_CONN
               value: mongodb://mongo-${SETUP_SUFFIX}:27017/admini 
-          image: aktosecurity/akto-api-testing:mono_staging1_feature_rootless
+          image: aktosecurity/akto-api-testing:${SETUP_SUFFIX}
           name: akto-api-security-testing-${SETUP_SUFFIX}
           resources: {}
       restartPolicy: Always
