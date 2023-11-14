@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongo-${SETUP_SUFFIX}
+  name: mongo-akto-latest
   namespace: dev 
 spec:
   selector:
-    app: mongo-${SETUP_SUFFIX}
+    app: mongo-akto-latest
   ports:
     - port: 27017
       targetPort: 27017
@@ -13,17 +13,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mongo-${SETUP_SUFFIX}
+  name: mongo-akto-latest
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mongo-${SETUP_SUFFIX}
+      app: mongo-akto-latest
   template:
     metadata:
       labels:
-        app: mongo-${SETUP_SUFFIX}
+        app: mongo-akto-latest
     spec:
       containers:
         - image: mongo
@@ -34,17 +34,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: akto-api-security-dashboard-${SETUP_SUFFIX}
+  name: akto-api-security-dashboard-latest
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: akto-api-security-dashboard-${SETUP_SUFFIX}
+      app: akto-api-security-dashboard-latest
   template:
     metadata:
       labels:
-        app: akto-api-security-dashboard-${SETUP_SUFFIX}
+        app: akto-api-security-dashboard-latest
     spec:
 
       containers:
@@ -72,8 +72,8 @@ spec:
             - name: PUPPETEER_REPLAY_SERVICE_URL
               value: http://akto-puppeteer-replay:3000
             - name: AKTO_MONGO_CONN
-              value: mongodb://mongo-${SETUP_SUFFIX}:27017/admini
-          image: aktosecurity/akto-api-security-dashboard:${SETUP_SUFFIX}
+              value: mongodb://mongo-akto-latest:27017/admini
+          image: aktosecurity/akto-api-security-dashboard:latest
           name: akto-api-security-dashboard
           ports:
             - containerPort: 8080
@@ -82,31 +82,17 @@ spec:
             requests: 
               cpu: "2"
               memory: "4Gi"
-        - name: mirror-api-logging
-          image: aktosecurity/mirror-api-logging:k8s_agent
-          env: 
-            - name: AKTO_TRAFFIC_BATCH_TIME_SECS
-              value: "10"
-            - name: AKTO_TRAFFIC_BATCH_SIZE
-              value: "100"
-            - name: AKTO_INFRA_MIRRORING_MODE
-              value: "gcp"
-            - name: AKTO_KAFKA_BROKER_MAL
-              value: ${FLASH_NLB_DNS}
-            - name: AKTO_MONGO_CONN
-              value: ${FLASH_MONGO_CONN}
-
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: akto-api-security-dashboard-${SETUP_SUFFIX}
+  name: akto-api-security-dashboard-latest
   namespace: dev
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
 spec:
   selector:
-    app: akto-api-security-dashboard-${SETUP_SUFFIX}
+    app: akto-api-security-dashboard-latest
   ports:
     - port: 8080
       targetPort: 8080
@@ -115,17 +101,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: akto-api-security-testing-${SETUP_SUFFIX}
+  name: akto-api-security-testing-latest
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: akto-api-security-testing-${SETUP_SUFFIX}
+      app: akto-api-security-testing-latest
   template:
     metadata:
       labels:
-        app: akto-api-security-testing-${SETUP_SUFFIX}
+        app: akto-api-security-testing-latest
     spec:
       containers:
         - env:
@@ -152,9 +138,9 @@ spec:
             - name: PUPPETEER_REPLAY_SERVICE_URL
               value: http://akto-puppeteer-replay:3000
             - name: AKTO_MONGO_CONN
-              value: mongodb://mongo-${SETUP_SUFFIX}:27017/admini 
-          image: aktosecurity/akto-api-testing:${SETUP_SUFFIX}
-          name: akto-api-security-testing-${SETUP_SUFFIX}
+              value: mongodb://mongo-akto-latest:27017/admini 
+          image: aktosecurity/akto-api-testing:latest
+          name: akto-api-security-testing-latest
           resources: {}
       restartPolicy: Always
 
