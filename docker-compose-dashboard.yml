@@ -11,7 +11,7 @@ services:
       - kafka1
 
   akto-internal:
-    image: aktosecurity/akto-internal:local
+    image: aktosecurity/akto-internal:a-765-merge
     env_file: ./docker-internal.env
     restart: always
     mem_limit: 4g
