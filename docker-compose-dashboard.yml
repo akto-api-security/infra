@@ -10,6 +10,14 @@ services:
     depends_on:
       - kafka1
 
+  akto-internal:
+    image: aktosecurity/akto-internal:local
+    env_file: ./docker-internal.env
+    restart: always
+    mem_limit: 4g
+    ports:
+      - "8081:8080"
+
   akto-api-security-testing:
     image: aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
