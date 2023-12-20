@@ -1,0 +1,18 @@
+version: '2'
+
+services:
+  akto-billing:
+    image: aktosecurity/akto-billing:local
+    env_file: ./docker-billing.env
+    restart: always
+    ports: 
+      - "8080:8080"
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
