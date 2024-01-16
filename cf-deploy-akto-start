@@ -28,7 +28,8 @@ else
 fi
 
 cd ~/akto/infra
-
+$MAYBE_SUDO docker-compose -f docker-compose.yml down
+$MAYBE_SUDO docker-compose pull
 $MAYBE_SUDO docker-compose up -d
 
 echo ""

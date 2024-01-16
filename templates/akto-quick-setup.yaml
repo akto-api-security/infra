@@ -28,7 +28,7 @@ Mappings:
     "eu-north-1":
       AMI: "ami-0f58e72599cb99a79"
     "ap-south-1":
-      AMI: "ami-0400aca7799d8cf19"
+      AMI: "ami-0e8b82cb80eec8007"
     "eu-west-3":
       AMI: "ami-064c70d04ad799d5e"
     "eu-west-2":
@@ -223,6 +223,7 @@ Resources:
                 - sudo mkdir -p /opt/aws/bin
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - rm -rf akto
                 - export COMPOSE_FILE=docker-compose-mongo.yml
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
@@ -334,7 +335,7 @@ Resources:
               VolumeType: gp2
               DeleteOnTermination: "true"
               VolumeSize: "20"
-              Encrypted: true
+              Encrypted: false
         UserData:
           Fn::Base64:
             Fn::Join:
@@ -347,6 +348,7 @@ Resources:
                 - sudo yum install -y python python-setuptools
                 - sudo yum install -y docker
                 - sudo dockerd&
+                - rm -rf akto
                 - sudo mkdir -p /opt/aws/bin
                 - export COMPOSE_FILE=docker-compose-dashboard.yml
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
