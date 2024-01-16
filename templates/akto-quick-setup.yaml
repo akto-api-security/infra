@@ -28,7 +28,7 @@ Mappings:
     "eu-north-1":
       AMI: "ami-0f58e72599cb99a79"
     "ap-south-1":
-      AMI: "ami-0fa9a93c099d0abb5"
+      AMI: "ami-0b71b0c05cdaf9e56"
     "eu-west-3":
       AMI: "ami-064c70d04ad799d5e"
     "eu-west-2":
