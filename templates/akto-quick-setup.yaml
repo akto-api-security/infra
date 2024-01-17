@@ -219,7 +219,6 @@ Resources:
                 - sudo yum update -y
                 - sudo yum install -y python python-setuptools
                 - sudo yum install -y docker
-                - sudo dockerd&
                 - sudo mkdir -p /opt/aws/bin
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
@@ -227,10 +226,10 @@ Resources:
                 - touch logs_mongo.txt
                 - export COMPOSE_FILE=docker-compose-mongo.yml
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/use_ami/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/use_ami/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
                 - Fn::Join:
