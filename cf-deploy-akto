@@ -108,7 +108,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
     curl -L -XGET -o master.zip https://github.com/akto-api-security/infra/archive/refs/heads/feature/use_ami.zip
     log_step 'unpacking...'
     unzip master.zip
-    mv infra-feature-use_ami akto/infra
+    mv infra-feature-use_ami infra
   fi
 
   # NB: this is to make onprem containers to all get named the same.

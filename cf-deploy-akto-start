@@ -27,7 +27,7 @@ else
   export BOLD=""
 fi
 
-cd ~/akto/infra
+cd ~/infra
 $MAYBE_SUDO docker-compose -f docker-compose.yml down
 $MAYBE_SUDO docker-compose pull
 $MAYBE_SUDO docker-compose up -d
