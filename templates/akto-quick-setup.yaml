@@ -24,49 +24,49 @@ Parameters:
 Mappings:
   RegionMap:
     "af-south-1":
-      AMI: "ami-093ca241e4c72c205"
+      AMI: "ami-0522b5a6b2777e316"
     "eu-north-1":
-      AMI: "ami-0f58e72599cb99a79"
+      AMI: "ami-04fcaf02eaca73f54"
     "ap-south-1":
-      AMI: "ami-0400aca7799d8cf19"
+      AMI: "ami-07cf1b16d35a9f68b"
     "eu-west-3":
-      AMI: "ami-064c70d04ad799d5e"
+      AMI: "ami-05c32642e6daadf42"
     "eu-west-2":
-      AMI: "ami-0dfe6158087b5c0ac"
+      AMI: "ami-01ed151b53583609f"
     "eu-south-1":
-      AMI: "ami-07b2af763a8b958f3"
+      AMI: "ami-0e282523f154aa485"
     "eu-west-1":
-      AMI: "ami-047aad752a426ed48"
+      AMI: "ami-0e930e4a978e2ff0f"
     "ap-northeast-3":
-      AMI: "ami-0cffa2172948e071e"
+      AMI: "ami-06048d83fdc062061"
     "ap-northeast-2":
-      AMI: "ami-087af0192368bc87c"
+      AMI: "ami-0056c0005d6b84c62"
     "me-south-1":
-      AMI: "ami-0a31e56929248acca"
+      AMI: "ami-0ab42d47e6db4ab1d"
     "ap-northeast-1":
-      AMI: "ami-0828596b82405edd7"
+      AMI: "ami-0394d7d6db91987e8"
     "sa-east-1":
-      AMI: "ami-0df67b3c17f090c24"
+      AMI: "ami-080af37b85310189b"
     "ca-central-1":
-      AMI: "ami-0eb3718c42cb70e52"
+      AMI: "ami-0d40e69be9e442e54"
     "ap-east-1":
-      AMI: "ami-0e992f1e63814db10"
+      AMI: "ami-056f3894594552283"
     "ap-southeast-1":
-      AMI: "ami-0ba98499caf94125a"
+      AMI: "ami-023fd4d007ff19a70"
     "ap-southeast-2":
-      AMI: "ami-0849cc8fe4ceaf988"
+      AMI: "ami-000d5f0843f517c60"
     "eu-central-1":
-      AMI: "ami-0f7585ae7a0d9a25a"
+      AMI: "ami-0f05345ac2a961e54"
     "ap-southeast-3":
-      AMI: "ami-0cf40308729b83366"
+      AMI: "ami-0be481745b519709b"
     "us-east-1":
-      AMI: "ami-0d52ddcdf3a885741"
+      AMI: "ami-03060227607f9e2a4"
     "us-east-2":
-      AMI: "ami-04148302a14f7d12b"
+      AMI: "ami-0b1bd2ac96bd17877"
     "us-west-1":
-      AMI: "ami-0ee3e1e65adeef858"
+      AMI: "ami-0bc8092dc5c333680"
     "us-west-2":
-      AMI: "ami-0ec021424fb596d6c"
+      AMI: "ami-0e8b2667d0a4c120f"
 Resources:
   ## Setting up VpcDetailsLambda
   GetVpcDetailsLambdaRole:
