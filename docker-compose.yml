@@ -71,7 +71,7 @@ services:
 
   akto-api-security-testing:
     image: public.ecr.aws/aktosecurity/akto-api-testing:latest
-    env_file: ./docker-dashboard.env
+    env_file: ./docker.env
     restart: always
     mem_limit: 4g
     depends_on:
