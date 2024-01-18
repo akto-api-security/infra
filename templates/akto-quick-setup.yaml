@@ -23,50 +23,49 @@ Parameters:
     Type: String
 Mappings:
   RegionMap:
-    "af-south-1":
-      AMI: "ami-0522b5a6b2777e316"
-    "eu-north-1":
-      AMI: "ami-04fcaf02eaca73f54"
     "ap-south-1":
       AMI: "ami-07cf1b16d35a9f68b"
-    "eu-west-3":
-      AMI: "ami-05c32642e6daadf42"
-    "eu-west-2":
-      AMI: "ami-01ed151b53583609f"
-    "eu-south-1":
-      AMI: "ami-0e282523f154aa485"
-    "eu-west-1":
-      AMI: "ami-0e930e4a978e2ff0f"
-    "ap-northeast-3":
-      AMI: "ami-06048d83fdc062061"
-    "ap-northeast-2":
-      AMI: "ami-0056c0005d6b84c62"
-    "me-south-1":
-      AMI: "ami-0ab42d47e6db4ab1d"
-    "ap-northeast-1":
-      AMI: "ami-0394d7d6db91987e8"
-    "sa-east-1":
-      AMI: "ami-080af37b85310189b"
-    "ca-central-1":
-      AMI: "ami-0d40e69be9e442e54"
-    "ap-east-1":
-      AMI: "ami-056f3894594552283"
-    "ap-southeast-1":
-      AMI: "ami-023fd4d007ff19a70"
-    "ap-southeast-2":
-      AMI: "ami-000d5f0843f517c60"
-    "eu-central-1":
-      AMI: "ami-0f05345ac2a961e54"
-    "ap-southeast-3":
-      AMI: "ami-0be481745b519709b"
     "us-east-1":
-      AMI: "ami-03060227607f9e2a4"
+      AMI: "ami-04950319f0558c77f"
     "us-east-2":
-      AMI: "ami-0b1bd2ac96bd17877"
+      AMI: "ami-004cb807e996219a8"
     "us-west-1":
-      AMI: "ami-0bc8092dc5c333680"
+      AMI: "ami-024fae8ce488dc490"
     "us-west-2":
-      AMI: "ami-0e8b2667d0a4c120f"
+      AMI: "ami-091e84991104e84de"
+    "af-south-1":
+      AMI: "ami-091955821bd271788"
+    "ap-east-1":
+      AMI: "ami-0e9c9fe57e735ca59"
+    "ap-southeast-3":
+      AMI: "ami-05108dba538294061"
+    "ap-southeast-2":
+      AMI: "ami-0830ec1d0fde7a5b1"
+    "ap-southeast-1":
+      AMI: "ami-0b6aec9c8c9cfc5d4"
+    "ap-northeast-3":
+      AMI: "ami-0e78c38689e59f763"
+    "ap-northeast-2":
+      AMI: "ami-06bd260c93ae20753"
+    "ap-northeast-1":
+      AMI: "ami-0c451cd722c8d7ad2"
+    "ca-central-1":
+      AMI: "ami-0f143a48fc15528c6"
+    "eu-central-1":
+      AMI: "ami-0781e55525778990a"
+    "eu-west-1":
+      AMI: "ami-0fd9f50c907ff3459"
+    "eu-west-2":
+      AMI: "ami-011a4bbdea5891e54"
+    "eu-west-3":
+      AMI: "ami-08a877789d1d3707a"
+    "eu-north-1":
+      AMI: "ami-0dd102afc42e4fa21"
+    "eu-south-1":
+      AMI: "ami-0e01cbd6d0de3d3c1"
+    "me-south-1":
+      AMI: "ami-056df6a81ac6e8fb6"
+    
 Resources:
   ## Setting up VpcDetailsLambda
   GetVpcDetailsLambdaRole:
