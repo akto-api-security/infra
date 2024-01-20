@@ -24,47 +24,49 @@ Parameters:
 Mappings:
   RegionMap:
     "ap-south-1":
-      AMI: "ami-07cf1b16d35a9f68b"
+      AMI: "ami-03c6fcf64ac2bce1d"
     "us-east-1":
-      AMI: "ami-04950319f0558c77f"
+      AMI: "ami-062a6198b602760e9"
     "us-east-2":
-      AMI: "ami-004cb807e996219a8"
+      AMI: "ami-0d4ef0583f3c6f0cf"
     "us-west-1":
-      AMI: "ami-024fae8ce488dc490"
+      AMI: "ami-0807a88bf25394748"
     "us-west-2":
-      AMI: "ami-091e84991104e84de"
+      AMI: "ami-076f4d8293cad5a31"
     "af-south-1":
-      AMI: "ami-091955821bd271788"
+      AMI: "ami-00f6e87c142ee80f7"
     "ap-east-1":
-      AMI: "ami-0e9c9fe57e735ca59"
+      AMI: "ami-089abc608cc94ed24"
     "ap-southeast-3":
-      AMI: "ami-05108dba538294061"
+      AMI: "ami-0584c5a84bc241a3c"
     "ap-southeast-2":
-      AMI: "ami-0830ec1d0fde7a5b1"
+      AMI: "ami-02f3142bb32be7b96"
     "ap-southeast-1":
-      AMI: "ami-0b6aec9c8c9cfc5d4"
+      AMI: "ami-0bc880c2ba1449abd"
     "ap-northeast-3":
-      AMI: "ami-0e78c38689e59f763"
+      AMI: "ami-048ae677a443b7a88"
     "ap-northeast-2":
-      AMI: "ami-06bd260c93ae20753"
+      AMI: "ami-062df82622ac28b51"
     "ap-northeast-1":
-      AMI: "ami-0c451cd722c8d7ad2"
+      AMI: "ami-023fbbd0cbd0bf0cd"
     "ca-central-1":
-      AMI: "ami-0f143a48fc15528c6"
+      AMI: "ami-00203455478e2c2fb"
     "eu-central-1":
-      AMI: "ami-0781e55525778990a"
+      AMI: "ami-0e13f066d5e38c93c"
     "eu-west-1":
-      AMI: "ami-0fd9f50c907ff3459"
+      AMI: "ami-031f4617ec15627b9"
     "eu-west-2":
-      AMI: "ami-011a4bbdea5891e54"
+      AMI: "ami-093543ae9be41c9c4"
     "eu-west-3":
-      AMI: "ami-08a877789d1d3707a"
+      AMI: "ami-0860133dfcf2927e0"
     "eu-north-1":
-      AMI: "ami-0dd102afc42e4fa21"
+      AMI: "ami-01c09638f69ccbf30"
     "eu-south-1":
-      AMI: "ami-0e01cbd6d0de3d3c1"
+      AMI: "ami-086460a5715f5f74a"
     "me-south-1":
-      AMI: "ami-056df6a81ac6e8fb6"
+      AMI: "ami-067d1fb73833606bd"
+    "sa-east-1":
+      AMI: "ami-03948097546577270"
     
 Resources:
   ## Setting up VpcDetailsLambda
@@ -222,11 +224,11 @@ Resources:
                 - sudo mkdir -p /opt/aws/bin
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-                - export COMPOSE_FILE=docker-compose-mongo.yml
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
+                - export COMPOSE_FILE=docker-compose-mongo.yml
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
@@ -364,6 +366,7 @@ Resources:
                 - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
                 - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
                 - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AKTO_SETUP_TYPE=AMI >> ~/akto/infra/docker-dashboard.env
                 - Fn::Join: 
                     - ""
                     - - "sudo echo AKTO_DASHBOARD_ROLE_NAME="
