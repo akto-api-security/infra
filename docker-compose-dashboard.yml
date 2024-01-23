@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: public.ecr.aws/aktosecurity/akto-api-security-dashboard:m-feature-use-ami-branch
+    image: public.ecr.aws/aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -11,7 +11,7 @@ services:
       - kafka1
 
   akto-api-security-testing:
-    image: public.ecr.aws/aktosecurity/akto-api-testing:m-feature-use-ami-branch
+    image: public.ecr.aws/aktosecurity/akto-api-testing:latest
     env_file: ./docker-dashboard.env
     restart: always
 
