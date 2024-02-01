@@ -5,7 +5,7 @@ services:
     container_name: mongo
     image: mongo
     restart: always
-    command: mongod --replSet "rs0" --bind_ip ${INSTANCE_IP}
+    command: mongod --replSet "rs0" --bind_ip ${INSTANCE_IP},localhost
     volumes:
       - ./data:/data/db
     ports:
