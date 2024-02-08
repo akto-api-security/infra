@@ -191,7 +191,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-        InstanceType: m5a.xlarge
+        InstanceType: m6a.large
         KeyName:
           Ref: KeyPair
         NetworkInterfaces:
@@ -315,7 +315,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-        InstanceType: m5a.xlarge
+        InstanceType: m6a.large
         KeyName:
           Ref: KeyPair
         NetworkInterfaces:
