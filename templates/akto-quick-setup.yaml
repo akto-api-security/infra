@@ -23,50 +23,51 @@ Parameters:
     Type: String
 Mappings:
   RegionMap:
-    "af-south-1":
-      AMI: "ami-093ca241e4c72c205"
-    "eu-north-1":
-      AMI: "ami-0f58e72599cb99a79"
-    "ap-south-1":
-      AMI: "ami-0400aca7799d8cf19"
-    "eu-west-3":
-      AMI: "ami-064c70d04ad799d5e"
-    "eu-west-2":
-      AMI: "ami-0dfe6158087b5c0ac"
-    "eu-south-1":
-      AMI: "ami-07b2af763a8b958f3"
-    "eu-west-1":
-      AMI: "ami-047aad752a426ed48"
-    "ap-northeast-3":
-      AMI: "ami-0cffa2172948e071e"
-    "ap-northeast-2":
-      AMI: "ami-087af0192368bc87c"
-    "me-south-1":
-      AMI: "ami-0a31e56929248acca"
-    "ap-northeast-1":
-      AMI: "ami-0828596b82405edd7"
-    "sa-east-1":
-      AMI: "ami-0df67b3c17f090c24"
-    "ca-central-1":
-      AMI: "ami-0eb3718c42cb70e52"
-    "ap-east-1":
-      AMI: "ami-0e992f1e63814db10"
-    "ap-southeast-1":
-      AMI: "ami-0ba98499caf94125a"
-    "ap-southeast-2":
-      AMI: "ami-0849cc8fe4ceaf988"
-    "eu-central-1":
-      AMI: "ami-0f7585ae7a0d9a25a"
-    "ap-southeast-3":
-      AMI: "ami-0cf40308729b83366"
     "us-east-1":
-      AMI: "ami-0d52ddcdf3a885741"
+      AMI: "ami-0f35aceebc1cb07cd"
+    "ap-south-1":
+      AMI: "ami-0a576a05c8f2486e4"  
     "us-east-2":
-      AMI: "ami-04148302a14f7d12b"
+      AMI: "ami-041e9e1c435009a50"  
     "us-west-1":
-      AMI: "ami-0ee3e1e65adeef858"
+      AMI: "ami-065bc8165870d1dab"  
     "us-west-2":
-      AMI: "ami-0ec021424fb596d6c"
+      AMI: "ami-060031791061a6e68"  
+    "af-south-1":
+      AMI: "ami-000e6e8047ea447c2"  
+    "ap-east-1":
+      AMI: "ami-0c70a160a2cf85956"  
+    "ap-southeast-3":
+      AMI: "ami-0156a004f005f398a"  
+    "ap-southeast-2":
+      AMI: "ami-071664bff088b2574"  
+    "ap-southeast-1":
+      AMI: "ami-0bb790fcd7ca592b5"  
+    "ap-northeast-3":
+      AMI: "ami-09977f94bd6f3d8f6"  
+    "ap-northeast-2":
+      AMI: "ami-02891b5f8bcb70c9d"  
+    "ap-northeast-1":
+      AMI: "ami-0f30e38f034f4ff22"  
+    "ca-central-1":
+      AMI: "ami-08f0378ba3235ed43"  
+    "eu-central-1":
+      AMI: "ami-0ddab119a00edb3e5"  
+    "eu-west-1":
+      AMI: "ami-051c90ade0d2e6020"  
+    "eu-west-2":
+      AMI: "ami-097a9d922affdb9ba"  
+    "eu-west-3":
+      AMI: "ami-031b3f4424ee380ec"  
+    "eu-north-1":
+      AMI: "ami-00173c2b2ec8796a9"  
+    "eu-south-1":
+      AMI: "ami-0be6b767f64de14d7"  
+    "me-south-1":
+      AMI: "ami-00ea323ad231249cd"  
+    "sa-east-1":
+      AMI: "ami-077b507baf6c82dbe"  
+    
 Resources:
   ## Setting up VpcDetailsLambda
   GetVpcDetailsLambdaRole:
@@ -223,12 +224,12 @@ Resources:
                 - sudo mkdir -p /opt/aws/bin
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-                - export COMPOSE_FILE=docker-compose-mongo.yml
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - export COMPOSE_FILE=docker-compose-mongo.yml
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
                 - Fn::Join:
@@ -334,7 +335,7 @@ Resources:
               VolumeType: gp2
               DeleteOnTermination: "true"
               VolumeSize: "20"
-              Encrypted: true
+              Encrypted: false
         UserData:
           Fn::Base64:
             Fn::Join:
@@ -352,7 +353,7 @@ Resources:
                 - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto' > cf-deploy-akto
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
                 - sudo echo >> ~/akto/infra/docker-dashboard.env
@@ -365,12 +366,13 @@ Resources:
                 - Fn::Sub: sudo echo AWS_ACCOUNT_ID=${AWS::AccountId} >> ~/akto/infra/docker-dashboard.env            
                 - Fn::Sub: sudo echo AWS_DEFAULT_REGION=${AWS::Region} >> ~/akto/infra/docker-dashboard.env
                 - Fn::Sub: sudo echo AKTO_DASHBOARD_STACK_NAME=${AWS::StackName} >> ~/akto/infra/docker-dashboard.env
+                - Fn::Sub: sudo echo AKTO_SETUP_TYPE=AMI >> ~/akto/infra/docker-dashboard.env
                 - Fn::Join: 
                     - ""
                     - - "sudo echo AKTO_DASHBOARD_ROLE_NAME="
                       - !Ref AktoDashboardRole
                       - " >> ~/akto/infra/docker-dashboard.env"
-                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/quick-setup/cf-deploy-akto-start' > cf-deploy-akto-start
+                - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/create-amis/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
                 - Fn::Join:
