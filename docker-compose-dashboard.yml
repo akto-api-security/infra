@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-dashboard:
-    image: aktosecurity/akto-api-security-dashboard:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-dashboard:latest
     env_file: ./docker-dashboard.env
     restart: always
     ports: 
@@ -11,13 +11,13 @@ services:
       - kafka1
 
   akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:latest
+    image: public.ecr.aws/aktosecurity/akto-api-testing:latest
     env_file: ./docker-dashboard.env
     restart: always
 
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: zoo1
     user: "0"  
     volumes:
@@ -36,7 +36,7 @@ services:
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: kafka1
     user: "0"
     ports:
@@ -69,7 +69,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   akto-api-security-runtime:
-    image: aktosecurity/akto-api-security-runtime:latest
+    image: public.ecr.aws/aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker-dashboard.env
     mem_limit: 4g
     restart: always
@@ -77,15 +77,16 @@ services:
       - kafka1
     
   akto-puppeteer-replay:
-    image: aktosecurity/akto-puppeteer-replay:latest-amd64
+    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
     ports:
       - "3000:3000"
     restart: always
 
   watchtower:
     image: containrrr/watchtower
+    restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 900
+    env_file: ./watchtower.env
     labels:
       com.centurylinklabs.watchtower.enable: "false"

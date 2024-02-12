@@ -3,7 +3,7 @@ version: '2'
 services:
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: zoo1
     user: "0"  
     volumes:
@@ -22,7 +22,7 @@ services:
 
   kafka1:
     image: confluentinc/cp-kafka:6.2.1
-    restart: on-failure:10
+    restart: always
     hostname: kafka1
     user: "0"
     ports:
@@ -55,7 +55,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   akto-api-security-context-analyser:
-    image: aktosecurity/akto-api-context-analyzer:latest
+    image: public.ecr.aws/aktosecurity/akto-api-context-analyzer:latest
     env_file: ./docker-context-analyser.env
     mem_limit: 4g    
     restart: always
@@ -63,15 +63,16 @@ services:
       - kafka1
 
   akto-hello-world:
-    image: hotavneesh/hello-world-server:latest
+    image: public.ecr.aws/aktosecurity/hello-world-server:latest
     restart: always
     ports: 
       - "8000:8000"
 
   watchtower:
     image: containrrr/watchtower
+    restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 900
+    env_file: ./watchtower.env
     labels:
       com.centurylinklabs.watchtower.enable: "false"

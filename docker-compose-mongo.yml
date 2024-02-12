@@ -6,7 +6,7 @@ services:
     image: mongo
     logging:
       driver: none
-    restart: on-failure:10
+    restart: always
     volumes:
       - ./data:/data/db
     ports:
