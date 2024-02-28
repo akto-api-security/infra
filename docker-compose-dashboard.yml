@@ -5,6 +5,7 @@ services:
     image: aktosecurity/akto-api-security-dashboard:local
     env_file: ./docker-dashboard.env
     restart: always
+    mem_limit: 7g
     ports: 
       - "8080:8080"
     depends_on:
@@ -14,7 +15,7 @@ services:
     image: aktosecurity/akto-internal:local
     env_file: ./docker-internal.env
     restart: always
-    mem_limit: 4g
+    mem_limit: 1g
     ports:
       - "8081:8080"
 
@@ -22,6 +23,7 @@ services:
     image: aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
     restart: always
+    mem_limit: 7g
 
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
@@ -33,6 +35,7 @@ services:
       - ./data-zoo-logs:/var/lib/zookeeper/log
       - ./data-zoo-secrets:/etc/zookeeper/secrets          
     container_name: zoo1
+    mem_limit: 2g
     ports:
       - "2181:2181"
     environment:
@@ -46,6 +49,7 @@ services:
     image: confluentinc/cp-kafka:6.2.1
     restart: on-failure:10
     hostname: kafka1
+    mem_limit: 4g
     user: "0"
     ports:
       - "9092:9092"
@@ -82,5 +86,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     env_file: ./watchtower.env
+    mem_limit: 200m
     labels:
       com.centurylinklabs.watchtower.enable: "false"
