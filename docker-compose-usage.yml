@@ -50,7 +50,35 @@ services:
       - ./data-kafka-secrets:/etc/kafka/secrets       
     depends_on:
       - zoo1
-  
+
+  prometheus-pushgateway:
+    image: prom/pushgateway:latest
+    ports:
+      - "9091:9091"
+    container_name: prometheus-pushgateway
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prom-data:/prometheus
+    depends_on:
+      - "prometheus-pushgateway"
+    container_name: prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - "prometheus"
+    container_name: grafana
+
   usage-collector:
     image: aktosecurity/usage-collector:latest
     restart: on-failure:10
@@ -65,3 +93,7 @@ services:
     env_file: ./docker-usage.env
     depends_on:
       - kafka1
+
+volumes:
+  grafana-storage:
+  prom-data:
