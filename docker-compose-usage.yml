@@ -80,7 +80,7 @@ services:
     container_name: grafana
 
   usage-collector:
-    image: aktosecurity/usage-collector:latest
+    image: aktosecurity/usage-collector:m-917-merge
     restart: on-failure:10
     ports:
       - "5000:5000"
@@ -88,7 +88,7 @@ services:
       - kafka1
 
   usage-processor:
-    image: aktosecurity/usage-processor:latest
+    image: aktosecurity/usage-processor:m-917-merge
     restart: on-failure:10
     env_file: ./docker-usage.env
     depends_on:
