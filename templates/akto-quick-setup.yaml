@@ -347,10 +347,10 @@ Resources:
                 - sudo yum install -y docker
                 - sudo dockerd&
                 - sudo mkdir -p /opt/aws/bin
-                - export COMPOSE_FILE=docker-compose-usage.yml
-                - sudo systemctl enable /usr/lib/systemd/system/docker.service\
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+                - export COMPOSE_FILE=docker-compose-usage.yml
+                - sudo systemctl enable /usr/lib/systemd/system/docker.service\
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/prometheus-setup-usage-infra/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
@@ -408,7 +408,7 @@ Resources:
       Protocol: HTTP
       HealthCheckEnabled: "true"
       HealthCheckIntervalSeconds: 10
-      HealthCheckPath: "/metrics"
+      HealthCheckPath: "/"
       HealthCheckPort: "5000"
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 6
