@@ -339,9 +339,9 @@ Resources:
             Fn::Join:
               - "\n"
               - - "#!/bin/bash -xe"
+                - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
                 - touch /tmp/hello.txt
                 - touch ~/hello.txt
-                - Fn::Sub: export AKTO_MONGO_CONN='${AktoMongoInstance.PrivateIp}'
                 - sudo yum update -y
                 - sudo yum install -y python python-setuptools
                 - sudo yum install -y docker
@@ -350,13 +350,12 @@ Resources:
                 - sudo wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
                 - sudo python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
                 - export COMPOSE_FILE=docker-compose-usage.yml
-                - sudo systemctl enable /usr/lib/systemd/system/docker.service\
+                - sudo systemctl enable /usr/lib/systemd/system/docker.service
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/prometheus-setup-usage-infra/cf-deploy-akto' > cf-deploy-akto
                 - sudo chmod 700 cf-deploy-akto
                 - "./cf-deploy-akto < <(echo 'test')"
-                - sudo echo >> ~/akto/infra/docker-billing.env\
-                - sudo echo DB_CONN_URL=mongodb://$AKTO_MONGO_CONN:27017/admini >>\
-                  ~/akto/infra/docker-usage.env\
+                - sudo echo >> ~/akto/infra/docker-billing.env
+                - sudo echo DB_CONN_URL=mongodb://$AKTO_MONGO_CONN:27017/admini >> ~/akto/infra/docker-usage.env
                 - curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/prometheus-setup-usage-infra/cf-deploy-akto-start' > cf-deploy-akto-start
                 - sudo chmod 700 cf-deploy-akto-start
                 - "./cf-deploy-akto-start < <(echo 'test')"
