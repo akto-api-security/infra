@@ -19,12 +19,6 @@ services:
     ports:
       - "8081:8080"
 
-  akto-api-security-testing:
-    image: aktosecurity/akto-api-testing:local
-    env_file: ./docker-dashboard.env
-    restart: always
-    mem_limit: 7g
-
   zoo1:
     image: confluentinc/cp-zookeeper:6.2.1
     restart: on-failure:10
