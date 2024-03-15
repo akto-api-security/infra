@@ -1,0 +1,19 @@
+version: '2'
+
+services:
+
+  akto-api-security-testing:
+    image: aktosecurity/akto-api-testing:local
+    env_file: ./docker-dashboard.env
+    restart: always
+    mem_limit: 7g
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    mem_limit: 200m
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
