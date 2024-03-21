@@ -2,11 +2,17 @@ version: '2'
 
 services:
 
-  akto-api-security-testing:
+  akto-api-security-testing-1:
     image: aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
     restart: always
-    mem_limit: 7g
+    mem_limit: 3500m
+
+  akto-api-security-testing-2:
+    image: aktosecurity/akto-api-testing:local
+    env_file: ./docker-dashboard.env
+    restart: always
+    mem_limit: 3500m
 
   watchtower:
     image: containrrr/watchtower
