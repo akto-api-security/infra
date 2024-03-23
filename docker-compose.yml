@@ -10,15 +10,6 @@ services:
       - redis
     restart: always
 
-  test_services:
-    image: ark2307/akto-ssrf-service:latest
-    env_file: ./docker-saas.env
-    ports:
-      - "4000:4000"
-    depends_on:
-      - redis
-    restart: always
-
   redis:
     container_name: redis
     image: redis:latest
