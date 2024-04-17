@@ -54,6 +54,7 @@ services:
   usage-collector:
     image: aktosecurity/usage-collector:latest
     restart: on-failure:10
+    env_file: ./docker-usage.env
     ports:
       - "5000:5000"
     depends_on:
