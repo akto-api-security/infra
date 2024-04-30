@@ -1,0 +1,19 @@
+version: '2'
+
+services:
+  akto-api-security-database-abstractor:
+    image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:test
+    env_file: ./docker-database-abstractor.env
+    restart: always
+    mem_limit: 7g
+    ports: 
+      - "9000:8080" 
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    mem_limit: 200m
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
