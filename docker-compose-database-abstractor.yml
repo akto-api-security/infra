@@ -2,7 +2,7 @@ version: '2'
 
 services:
   akto-api-security-database-abstractor:
-    image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:test
+    image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:latest
     env_file: ./docker-database-abstractor.env
     restart: always
     mem_limit: 7g
