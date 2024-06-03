@@ -162,15 +162,15 @@ Resources:
       Path: /
       Roles:
         - !Ref RefreshHandlerLambdaBasicExecutionRole
-  # AktoContextAnalyzerSecurityGroup:
-  #   Type: 'AWS::EC2::SecurityGroup'
-  #   Properties:
-  #     VpcId: !GetAtt
-  #       - CustomSourceGetVpcDetails
-  #       - VpcId
-  #     GroupDescription: 'Enable the ports Akto requires (22, 9092)'
-  #     SecurityGroupIngress: []
-  #     SecurityGroupEgress: []
+  AktoContextAnalyzerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: 'Enable the ports Akto requires (22, 9092)'
+      SecurityGroupIngress: []
+      SecurityGroupEgress: []
   AktoContextAnalyzerASGLaunchConfiguration:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
