@@ -8,6 +8,8 @@ Parameters:
     Type: 'AWS::EC2::Subnet::Id'
   KeyPair:
     Type: 'AWS::EC2::KeyPair::KeyName'
+  DatabaseAbstractorUrl:
+    Type: String
   DatabaseAbstractorToken:
     Type: String
 Mappings:
@@ -224,6 +226,7 @@ Resources:
           - |+
 
           - - '#!/bin/bash -xe'
+            - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_URL=''${DatabaseAbstractorUrl}'''
             - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_TOKEN=''${DatabaseAbstractorToken}'''
             - !Sub 'export AKTO_KAFKA_IP=''${AktoNLB.DNSName}'''
             - touch /tmp/hello.txt
@@ -251,6 +254,9 @@ Resources:
             - >-
               sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
               ~/akto/infra/docker-runtime.env
+            - >-
+              sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
+              ~/akto/infra/docker-mini-runtime.env
             - >-
               sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
               ~/akto/infra/docker-mini-runtime.env
