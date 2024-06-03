@@ -5,10 +5,10 @@ services:
     image: tangobee/akto-dependency-graph
     restart: always
     ports:
-      - "8080:8080"
+      - "80:8080"
 
-  dependency-graph-frontend:
-    image: tangobee/akto-dependency-graph-frontend
+  dependency-graph-validator:
+    image: tangobee/akto-dependency-graph-validator:latest
     restart: always
     ports:
-      - "80:80"
+      - "81:3001"
