@@ -62,7 +62,7 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
     restart: always
-    mem_limit: 7g
+    mem_limit: 4g
     ports: 
       - "9002:8080"
     depends_on:
