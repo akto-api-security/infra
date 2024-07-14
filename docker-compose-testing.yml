@@ -14,6 +14,12 @@ services:
     restart: always
     mem_limit: 3300m
 
+  akto-api-security-testing-3:
+    image: aktosecurity/akto-api-testing:local
+    env_file: ./docker-dashboard.env
+    restart: always
+    mem_limit: 3300m  
+
   akto-puppeteer-replay:
     image: aktosecurity/akto-puppeteer-replay:latest-amd64
     ports:
