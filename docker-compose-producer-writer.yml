@@ -61,7 +61,7 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "50m"
+        max-size: "1g"
         max-file: "3"
   akto-api-security-writes-consumer:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
@@ -75,7 +75,7 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "50m"
+        max-size: "1g"
         max-file: "3"
   watchtower:
     image: containrrr/watchtower
