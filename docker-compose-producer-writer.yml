@@ -58,6 +58,11 @@ services:
       - "9001:8080"
     depends_on:
       - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
   akto-api-security-writes-consumer:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
@@ -67,6 +72,11 @@ services:
       - "9002:8080"
     depends_on:
       - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
   watchtower:
     image: containrrr/watchtower
     restart: always
