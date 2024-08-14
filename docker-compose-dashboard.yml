@@ -75,7 +75,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   akto-puppeteer-replay:
-    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
+    image: ayush12493/puppeteer-test:autologin
     ports:
       - "3000:3000"
     restart: always
