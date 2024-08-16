@@ -21,11 +21,11 @@ services:
     mem_limit: 3300m  
 
   akto-puppeteer-replay:
-    image: aktosecurity/akto-puppeteer-replay:latest-amd64
+    image: ayush12493/puppeteer-test:autologin
     ports:
       - "3000:3000"
     restart: always
-    mem_limit: 400m
+    mem_limit: 3300m
 
   watchtower:
     image: containrrr/watchtower
