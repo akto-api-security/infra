@@ -1,0 +1,10 @@
+name: mini-runtime-daemonset-pulumi-setup
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+description: Mini-runtime and daemonset pulumi setup
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: helm-kubernetes-typescript

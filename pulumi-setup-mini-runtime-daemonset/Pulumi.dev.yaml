@@ -1,0 +1,8 @@
+config:
+  azure-native:clientId: <Azure-Client-ID>
+  azure-native:clientSecret:
+    secure: <Azure-Client-Secret>
+  azure-native:subscriptionId: <Azure-subscription-ID>
+  azure-native:tenantId: <Azure-Tenant-ID>
+  test-helm-project:k8sNamespace: <k8s-Namespace>
+  databaseAbstractorToken: <Database-abstractor-token>
