@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: akto-k8s-pulumi
+  namespace: {NAMESPACE}
+  labels:
+    app: akto-collector
+spec:
+  selector:
+    matchLabels:
+      app: akto-collector
+  template:
+    metadata:
+      labels:
+        app: akto-collector
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostPID: true
+      containers:
+      - name: mirror-api-logging
+        image: aktosecurity/mirror-api-logging:k8s_ebpf
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+        env: 
+          - name: AKTO_TRAFFIC_BATCH_TIME_SECS
+            value: "10"
+          - name: AKTO_TRAFFIC_BATCH_SIZE
+            value: "100"
+          - name: AKTO_KAFKA_BROKER_MAL
+            value: "<AKTO_NLB_IP>:9092"
+          - name: AKTO_MONGO_CONN
+            value: "mongodb://0.0.0.0:27017/admini"
+        securityContext:
+          capabilities:
+            add:
+            - SYS_PTRACE
+            - SYS_ADMIN
+          privileged: true
+        volumeMounts:
+          # needed to load kernel headers
+          - name: lib-modules
+            mountPath: /lib/modules
+            readOnly: true
+          # needed to trace kernel events
+          - name: sys-kernel
+            mountPath: /sys/kernel
+            readOnly: true
+          - name: host
+            mountPath: /host
+            readOnly: true
+      volumes:
+        - name: sys-kernel
+          hostPath:
+            path: /sys/kernel
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: host
+          hostPath:
+            path : /
