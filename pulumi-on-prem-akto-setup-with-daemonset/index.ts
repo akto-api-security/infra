@@ -46,6 +46,16 @@ const docdbSubnetGroup = new aws.docdb.SubnetGroup("docdbsubnetgroup", {
     subnetIds: subnets.then(subnets => subnets.ids),
 });
 
+const docdbParameterGroup = new aws.docdb.ClusterParameterGroup("docdbparametergroup", {
+    family: "docdb5.0",
+    parameters: [
+        {
+            name: "tls",
+            value: "disabled",  // Disable TLS for the cluster
+        },
+    ],
+});
+
 const docdbCluster = new aws.docdb.Cluster("aktoDocDBCluster", {
     clusterIdentifier: "akto-docdb-cluster",
     engine: "docdb",
@@ -53,7 +63,9 @@ const docdbCluster = new aws.docdb.Cluster("aktoDocDBCluster", {
     masterPassword: "eightdigitpassword",
     dbSubnetGroupName: docdbSubnetGroup.name,
     vpcSecurityGroupIds: [docdbSecurityGroup.id],
-    applyImmediately: true
+    applyImmediately: true,
+    dbClusterParameterGroupName: docdbParameterGroup.name,
+    skipFinalSnapshot: true
 });
 
 const docdbInstance = new aws.docdb.ClusterInstance("exampleInstance", {
@@ -61,9 +73,9 @@ const docdbInstance = new aws.docdb.ClusterInstance("exampleInstance", {
     clusterIdentifier: docdbCluster.id,
     instanceClass: "db.r5.large",  // Adjust the instance class as needed
     applyImmediately: true,
-});
+}, { dependsOn: [docdbCluster] });
 
-const connectionString = pulumi.interpolate`mongodb://${docdbCluster.masterUsername}:${docdbCluster.masterPassword}@${docdbCluster.endpoint}:${docdbCluster.port}/?ssl=false&retryWrites=false`;
+const connectionString = pulumi.interpolate`mongodb://${docdbCluster.masterUsername}:${docdbCluster.masterPassword}@${docdbCluster.endpoint}:${docdbCluster.port}`;
 
 const miniRuntimeChart = new helm.Chart("akto", {
     version: "0.1.8",
