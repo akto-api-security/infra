@@ -1,4 +1,9 @@
 config:
+  aws:region: <REGION>
+  aws:accessKey: <accessKey>
+  aws:secretKey: <SecretKey>
+  aws:token: <Token>
+  eks-cluster-name: <eks-Cluster-Name>
   azure-native:clientId: <Azure-Client-ID>
   azure-native:clientSecret:
     secure: <Azure-Client-Secret>
