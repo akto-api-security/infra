@@ -79,7 +79,10 @@ const connectionString = pulumi.interpolate`mongodb://${docdbCluster.masterUsern
 
 const miniRuntimeChart = new helm.Chart("akto", {
     version: "0.1.8",
-    path: "./akto-setup",
+    chart: "akto",
+    fetchOpts: {
+        repo: "https://akto-api-security.github.io/helm-charts",
+    },
     namespace: k8sNamespace,
     values: {
         mongo: {
