@@ -87,6 +87,13 @@ const miniRuntimeChart = new helm.Chart("akto", {
     values: {
         mongo: {
             aktoMongoConn: connectionString
+        },
+        keel: {
+            keel: {
+                env: {
+                    enabled: false
+                }
+            }
         }
     },
 });
