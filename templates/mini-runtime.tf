@@ -221,6 +221,13 @@ resource "aws_launch_configuration" "akto_launch_configuration" {
   security_groups        = [aws_security_group.akto_security_group.id]
   associate_public_ip_address = false
 
+  # Specify root block device for the instance
+  root_block_device {
+    volume_size           = 20   # Specify 20 GB volume size
+    volume_type           = "gp2"
+    delete_on_termination = true
+  }
+
   user_data = <<-EOF
     #!/bin/bash -xe
     export DATABASE_ABSTRACTOR_SERVICE_URL='${var.database_abstractor_url}'
