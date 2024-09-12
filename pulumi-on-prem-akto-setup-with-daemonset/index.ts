@@ -94,6 +94,20 @@ const miniRuntimeChart = new helm.Chart("akto", {
                     enabled: false
                 }
             }
+        },
+        runtime: {
+            kafka1: {
+                image: {
+                    tag: latest
+                }
+            }
+        },
+        runtime: {
+            zoo1: {
+                image: {
+                    tag: latest
+                }
+            }
         }
     },
 });
