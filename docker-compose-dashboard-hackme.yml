@@ -1,0 +1,22 @@
+version: '2.3'
+
+services:
+
+  mongo:
+    container_name: mongo
+    image: mongo
+    restart: on-failure:10
+    volumes:
+      - ./data:/data/db
+    ports:
+      - "27017:27017"
+
+  akto-api-security-dashboard:
+    image: aktosecurity/akto-api-security-dashboard:akto_staging1_feature_auth0_integration_master_merge
+    env_file: ./docker-dashboard.env
+    restart: always
+    mem_limit: 2g
+    ports:
+      - "81:8080"
+    depends_on:
+      - mongo
