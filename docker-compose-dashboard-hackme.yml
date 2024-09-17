@@ -13,7 +13,7 @@ services:
 
   akto-api-security-dashboard:
     image: aktosecurity/akto-api-security-dashboard:akto_staging1_feature_auth0_integration_master_merge
-    env_file: ./docker-dashboard.env
+    env_file: ./docker-dashboard-hackme.env
     restart: always
     mem_limit: 2g
     ports:
