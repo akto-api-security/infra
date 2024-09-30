@@ -1,0 +1,342 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This template sets up Akto modules using ECS with Fargate, including Kafka and Zookeeper,
+  with CloudWatch logging enabled.
+Parameters:
+  SubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  DatabaseAbstractorUrl:
+    Type: String
+  DatabaseAbstractorToken:
+    Type: String
+
+Mappings:
+  RegionMap:
+    af-south-1:
+      AMI: ami-093ca241e4c72c205
+    eu-north-1:
+      AMI: ami-0f58e72599cb99a79
+    ap-south-1:
+      AMI: ami-0400aca7799d8cf19
+    eu-west-3:
+      AMI: ami-064c70d04ad799d5e
+    eu-west-2:
+      AMI: ami-0dfe6158087b5c0ac
+    eu-south-1:
+      AMI: ami-07b2af763a8b958f3
+    eu-west-1:
+      AMI: ami-047aad752a426ed48
+    ap-northeast-3:
+      AMI: ami-0cffa2172948e071e
+    ap-northeast-2:
+      AMI: ami-087af0192368bc87c
+    me-south-1:
+      AMI: ami-0a31e56929248acca
+    ap-northeast-1:
+      AMI: ami-0828596b82405edd7
+    sa-east-1:
+      AMI: ami-0df67b3c17f090c24
+    ca-central-1:
+      AMI: ami-0eb3718c42cb70e52
+    ap-east-1:
+      AMI: ami-0e992f1e63814db10
+    ap-southeast-1:
+      AMI: ami-0ba98499caf94125a
+    ap-southeast-2:
+      AMI: ami-0849cc8fe4ceaf988
+    eu-central-1:
+      AMI: ami-0f7585ae7a0d9a25a
+    ap-southeast-3:
+      AMI: ami-0cf40308729b83366
+    us-east-1:
+      AMI: ami-0d52ddcdf3a885741
+    us-east-2:
+      AMI: ami-04148302a14f7d12b
+    us-west-1:
+      AMI: ami-0ee3e1e65adeef858
+    us-west-2:
+      AMI: ami-0ec021424fb596d6c
+
+Resources:
+  ECSAktoCluster:
+    Type: AWS::ECS::Cluster
+    Properties: {}
+
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/akto
+      RetentionInDays: 14  # You can adjust the retention period as needed
+
+  AktoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: 'Enable necessary ports for Akto ECS service and Kafka'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 19092
+          ToPort: 19092
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2181
+          ToPort: 2181
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  AktoNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: AktoKafkaNLB
+      Subnets:
+        - !Ref SubnetId
+      Scheme: internet-facing
+      Type: network
+      IpAddressType: ipv4
+
+  KafkaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: KafkaTargetGroup
+      Port: 19092
+      Protocol: TCP
+      TargetType: ip
+      VpcId: !GetAtt CustomSourceGetVpcDetails.VpcId
+      HealthCheckProtocol: TCP
+
+  AktoNLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref KafkaTargetGroup
+      LoadBalancerArn: !Ref AktoNLB
+      Port: 19092
+      Protocol: TCP
+
+  ECSAktoTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: akto-task
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt GetAktoSetupDetailsLambdaBasicExecutionRole.Arn
+      TaskRoleArn: !GetAtt GetAktoSetupDetailsLambdaBasicExecutionRole.Arn
+      ContainerDefinitions:
+        # Zookeeper container configuration
+        - Name: zoo1
+          Image: 'confluentinc/cp-zookeeper:6.2.1'  # Replace with a specific version if needed
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 2181
+              Protocol: tcp
+          Environment:
+            - Name: ZOOKEEPER_CLIENT_PORT
+              Value: '2181'
+            - Name: ZOOKEEPER_SERVER_ID
+              Value: '1'
+            - Name: ZOOKEEPER_SERVERS
+              Value: 'localhost:2888:3888'
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: zookeeper
+
+        # Kafka container configuration
+        - Name: kafka1
+          Image: 'confluentinc/cp-kafka:6.2.1'  # Replace with a specific version if needed
+          Cpu: 256
+          Memory: 1024
+          PortMappings:
+            - ContainerPort: 9092
+              Protocol: tcp
+            - ContainerPort: 19092
+              Protocol: tcp
+            - ContainerPort: 29092
+              Protocol: tcp
+          Environment:
+            - Name: KAFKA_BROKER_ID
+              Value: '1'
+            - Name: KAFKA_ZOOKEEPER_CONNECT
+              Value: 'localhost:2181'  # Connect to the Zookeeper container
+            - Name: KAFKA_ADVERTISED_LISTENERS
+              Value: 'LISTENER_DOCKER_EXTERNAL_DIFFHOST://localhost:9092, LISTENER_DOCKER_INTERNAL://localhost:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092'
+            - Name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              Value: 'LISTENER_DOCKER_EXTERNAL_DIFFHOST:PLAINTEXT, LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_LOCALHOST:PLAINTEXT'
+            - Name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              Value: '1'
+            - Name: KAFKA_INTER_BROKER_LISTENER_NAME
+              Value: 'LISTENER_DOCKER_INTERNAL'
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: kafka
+
+        # Akto application container
+        - Name: akto-container
+          Image: 'public.ecr.aws/aktosecurity/akto-api-security-mini-runtime:latest'  # Replace with your actual image
+          Cpu: 512
+          Memory: 1024
+          Environment:
+            - Name: DATABASE_ABSTRACTOR_SERVICE_URL
+              Value: !Ref DatabaseAbstractorUrl
+            - Name: DATABASE_ABSTRACTOR_SERVICE_TOKEN
+              Value: !Ref DatabaseAbstractorToken
+            - Name: AKTO_KAFKA_BROKER_URL
+              Value: 'localhost:19092'
+            - Name: AKTO_KAFKA_BROKER_MAL
+              Value: 'localhost:29092'
+            - Name: AKTO_KAFKA_TOPIC_NAME
+              Value: 'akto.api.logs'
+            - Name: AKTO_CONFIG_NAME
+              Value: 'staging'
+            - Name: AKTO_KAFKA_GROUP_ID_CONFIG
+              Value: 'asdf'
+            - Name: AKTO_KAFKA_MAX_POLL_RECORDS_CONFIG
+              Value: '100'
+            - Name: AKTO_TRAFFIC_BATCH_SIZE
+              Value: '100'
+            - Name: AKTO_TRAFFIC_BATCH_TIME_SECS
+              Value: '10'
+            - Name: RUNTIME_MODE
+              Value: 'hybrid'
+            - NAME: IS_KUBERNETES
+              Value: 'true'
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: akto
+
+  ECSAktoService:
+    Type: AWS::ECS::Service
+    DependsOn: 
+        - AktoNLBListener
+    Properties:
+      Cluster: !Ref ECSAktoCluster
+      TaskDefinition: !Ref ECSAktoTaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          SecurityGroups:
+            - !Ref AktoSecurityGroup
+          AssignPublicIp: ENABLED
+      DesiredCount: 1
+      LoadBalancers:
+        - TargetGroupArn: !Ref KafkaTargetGroup
+          ContainerName: kafka1
+          ContainerPort: 19092
+
+
+  # IAM Role for ECS Task Execution
+  GetAktoSetupDetailsLambdaBasicExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ECSExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'ecs:UpdateContainerInstancesState'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:StartTelemetrySession'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                Resource: '*'
+
+  # VPC Details for Security Group and Networking
+  CustomSourceGetVpcDetails:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt GetVpcDetailsLambda.Arn
+
+  GetVpcDetailsLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: Look up info from a VPC
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Timeout: 30
+      Role: !GetAtt GetVpcDetailsLambdaRole.Arn
+      Environment:
+        Variables:
+          SUBNET_ID: !Ref SubnetId
+      Code:
+        ZipFile: >
+          var SUBNET_ID = process.env.SUBNET_ID; var aws = require('aws-sdk');
+          var response = require('cfn-response'); var ec2 = new aws.EC2();
+          exports.handler = async function(event, context) {
+              if (event.RequestType == 'Delete') {
+                 await response.send(event, context, 'SUCCESS');
+                 return;
+              }
+              var params = {
+                 SubnetIds: [SUBNET_ID] 
+              };
+              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
+                 console.error(err);
+              });
+              await response.send(event, context, 'SUCCESS', {VpcId: subnets['Subnets'][0]['VpcId']})
+          };
+  GetVpcDetailsLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: DescribeAssetsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeVpcs'
+                  - 'ec2:DescribeSubnets'
+                Resource: '*'
+Outputs:
+  NLBEndpoint:
+    Description: "DNS name of the Network Load Balancer"
+    Value: !GetAtt AktoNLB.DNSName
