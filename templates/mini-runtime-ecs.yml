@@ -124,8 +124,8 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: akto-task
-      Cpu: '1024'
-      Memory: '2048'
+      Cpu: '2048'
+      Memory: '4096'
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -191,8 +191,8 @@ Resources:
         # Akto application container
         - Name: akto-container
           Image: 'public.ecr.aws/aktosecurity/akto-api-security-mini-runtime:latest'  # Replace with your actual image
-          Cpu: 512
-          Memory: 1024
+          Cpu: 1536
+          Memory: 3072
           Environment:
             - Name: DATABASE_ABSTRACTOR_SERVICE_URL
               Value: !Ref DatabaseAbstractorUrl
