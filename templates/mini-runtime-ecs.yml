@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   This template sets up Akto modules using ECS with Fargate, including Kafka and Zookeeper,
   with CloudWatch logging enabled.
-
 Parameters:
   SubnetId:
     Type: 'AWS::EC2::Subnet::Id'
@@ -70,6 +69,56 @@ Resources:
     Properties:
       LogGroupName: /ecs/akto
       RetentionInDays: 14  # You can adjust the retention period as needed
+
+  AktoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !GetAtt
+        - CustomSourceGetVpcDetails
+        - VpcId
+      GroupDescription: 'Enable necessary ports for Akto ECS service and Kafka'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 19092
+          ToPort: 19092
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2181
+          ToPort: 2181
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  AktoNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: AktoKafkaNLB
+      Subnets:
+        - !Ref SubnetId
+      Scheme: internet-facing
+      Type: network
+      IpAddressType: ipv4
+
+  KafkaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: KafkaTargetGroup
+      Port: 19092
+      Protocol: TCP
+      TargetType: ip
+      VpcId: !GetAtt CustomSourceGetVpcDetails.VpcId
+      HealthCheckProtocol: TCP
+
+  AktoNLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref KafkaTargetGroup
+      LoadBalancerArn: !Ref AktoNLB
+      Port: 19092
+      Protocol: TCP
 
   ECSAktoTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -179,6 +228,8 @@ Resources:
 
   ECSAktoService:
     Type: AWS::ECS::Service
+    DependsOn: 
+        - AktoNLBListener
     Properties:
       Cluster: !Ref ECSAktoCluster
       TaskDefinition: !Ref ECSAktoTaskDefinition
@@ -191,26 +242,11 @@ Resources:
             - !Ref AktoSecurityGroup
           AssignPublicIp: ENABLED
       DesiredCount: 1
+      LoadBalancers:
+        - TargetGroupArn: !Ref KafkaTargetGroup
+          ContainerName: kafka1
+          ContainerPort: 19092
 
-  AktoSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      VpcId: !GetAtt
-        - CustomSourceGetVpcDetails
-        - VpcId
-      GroupDescription: 'Enable necessary ports for Akto ECS service and Kafka'
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 19092
-          ToPort: 19092
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 2181
-          ToPort: 2181
-          CidrIp: 0.0.0.0/0
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
 
   # IAM Role for ECS Task Execution
   GetAktoSetupDetailsLambdaBasicExecutionRole:
@@ -277,7 +313,6 @@ Resources:
               });
               await response.send(event, context, 'SUCCESS', {VpcId: subnets['Subnets'][0]['VpcId']})
           };
-
   GetVpcDetailsLambdaRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -301,3 +336,7 @@ Resources:
                   - 'ec2:DescribeVpcs'
                   - 'ec2:DescribeSubnets'
                 Resource: '*'
+  Outputs:
+    NLBEndpoint:
+      Description: "DNS name of the Network Load Balancer"
+      Value: !GetAtt AktoNLB.DNSName
