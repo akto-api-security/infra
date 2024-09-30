@@ -336,7 +336,7 @@ Resources:
                   - 'ec2:DescribeVpcs'
                   - 'ec2:DescribeSubnets'
                 Resource: '*'
-  Outputs:
-    NLBEndpoint:
-      Description: "DNS name of the Network Load Balancer"
-      Value: !GetAtt AktoNLB.DNSName
+Outputs:
+  NLBEndpoint:
+    Description: "DNS name of the Network Load Balancer"
+    Value: !GetAtt AktoNLB.DNSName
