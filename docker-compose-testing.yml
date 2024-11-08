@@ -21,7 +21,7 @@ services:
     mem_limit: 3300m  
 
   akto-puppeteer-replay:
-    image: ayush12493/puppeteer-test:autologin
+    image: aktosecurity/akto-puppeteer-replay:latest
     ports:
       - "3000:3000"
     restart: always
