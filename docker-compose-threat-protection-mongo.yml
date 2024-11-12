@@ -1,0 +1,9 @@
+services:
+  mongo-threat-detection:
+    container_name: mongo-threat-detection
+    image: mongo
+    restart: on-failure:10
+    volumes:
+      - ./data-threat-protection:/data/db
+    ports:
+      - "27017:27017"

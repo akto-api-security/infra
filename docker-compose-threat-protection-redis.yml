@@ -1,0 +1,7 @@
+services:
+  redis-threat-detection:
+    container_name: redis-threat-detection
+    image: redis
+    restart: on-failure:10
+    ports:
+      - "6379:6379"
