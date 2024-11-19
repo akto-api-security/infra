@@ -1,0 +1,200 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "subnetId": {
+        "type": "string",
+        "metadata": {
+          "description": "Subnet ID in which resources will be deployed."
+        }
+      }, 
+      "adminUsername": {
+        "type": "string",
+        "metadata": {
+          "description": "Admin username for VM instances."
+        }
+      },
+      "sshKeyData": {
+        "type": "string",
+        "metadata": {
+          "description": "SSH public key for secure login."
+        }
+      },
+      "databaseAbstractorUrl": {
+        "type": "string",
+        "metadata": {
+          "description": "Database Abstractor Service URL."
+        }
+      },
+      "databaseAbstractorToken": {
+        "type": "string",
+        "metadata": {
+          "description": "Token for Database Abstractor Service."
+        }
+      }
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Network/networkSecurityGroups",
+        "apiVersion": "2021-02-01",
+        "name": "akto-nsg",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "securityRules": [
+            {
+              "name": "allow-ssh",
+              "properties": {
+                "protocol": "Tcp",
+                "sourcePortRange": "*",
+                "destinationPortRange": "22",
+                "sourceAddressPrefix": "*",
+                "destinationAddressPrefix": "*",
+                "access": "Allow",
+                "priority": 100,
+                "direction": "Inbound"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Network/publicIPAddresses",
+        "apiVersion": "2021-02-01",
+        "name": "AKTO-PUBLIC-IP",
+        "location": "[resourceGroup().location]",
+        "sku": {
+          "name": "Standard"
+        },
+        "properties": {
+          "publicIPAllocationMethod": "Static"
+        }
+      },
+      {
+        "type": "Microsoft.Network/loadBalancers",
+        "apiVersion": "2021-02-01",
+        "name": "AKTO-LB",
+        "location": "[resourceGroup().location]",
+        "sku": {
+          "name": "Standard"
+        },
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')]"
+        ],
+        "properties": {
+          "frontendIPConfigurations": [
+            {
+              "name": "frontend",
+              "properties": {
+                "publicIPAddress": {
+                  "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')]"
+                }
+              }
+            }
+          ],
+          "backendAddressPools": [
+            {
+              "name": "backend-pool"
+            }
+          ],
+          "loadBalancingRules": [
+            {
+              "name": "tcp-rule",
+              "properties": {
+                "frontendIPConfiguration": {
+                  "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', 'AKTO-LB', 'frontend')]"
+                },
+                "backendAddressPool": {
+                  "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'AKTO-LB', 'backend-pool')]"
+                },
+                "protocol": "Tcp",
+                "frontendPort": 9092,
+                "backendPort": 9092,
+                "enableFloatingIP": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachineScaleSets",
+        "apiVersion": "2021-07-01",
+        "name": "akto-vmss",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/loadBalancers', 'AKTO-LB')]",
+          "[resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')]"
+        ],
+        "properties": {
+          "virtualMachineProfile": {
+            "osProfile": {
+              "computerNamePrefix": "aktovm",
+              "adminUsername": "[parameters('adminUsername')]",
+              "linuxConfiguration": {
+                "disablePasswordAuthentication": true,
+                "ssh": {
+                  "publicKeys": [
+                    {
+                      "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                      "keyData": "[parameters('sshKeyData')]"
+                    }
+                  ]
+                }
+              },
+              "customData": "[base64(concat('#!/bin/bash\n', 'sudo apt update -y\n', 'sudo apt install -y docker.io docker-compose wget\n', 'sudo systemctl start docker\n', 'sudo systemctl enable docker\n', 'wget https://raw.githubusercontent.com/akto-api-security/infra/refs/heads/feature/quick-setup/docker-compose-mini-runtime.yml -O docker-compose-mini-runtime.yml\n', 'wget https://raw.githubusercontent.com/akto-api-security/infra/refs/heads/feature/quick-setup/docker-mini-runtime.env -O docker-mini-runtime.env\n', 'wget https://raw.githubusercontent.com/akto-api-security/infra/refs/heads/feature/quick-setup/watchtower.env -O watchtower.env\n', 'sed -i \"s|DATABASE_ABSTRACTOR_SERVICE_URL=.*|DATABASE_ABSTRACTOR_SERVICE_URL=', parameters('databaseAbstractorUrl'), '|g\" docker-mini-runtime.env\n', 'sed -i \"s|DATABASE_ABSTRACTOR_SERVICE_TOKEN=.*|DATABASE_ABSTRACTOR_SERVICE_TOKEN=', parameters('databaseAbstractorToken'), '|g\" docker-mini-runtime.env\n', 'LOAD_BALANCER_IP=', reference(resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')).ipAddress, '\n', 'sed -i \"s|\\\\\\${AKTO_KAFKA_IP}|', reference(resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')).ipAddress, '|g\" docker-compose-mini-runtime.yml\n', 'docker-compose -f docker-compose-mini-runtime.yml up -d\n'))]"
+            },
+            "storageProfile": {
+              "imageReference": {
+                "publisher": "Canonical",
+                "offer": "0001-com-ubuntu-server-focal",
+                "sku": "20_04-lts-arm64",
+                "version": "latest"
+              },
+              "osDisk": {
+                "createOption": "FromImage"
+              }
+            },
+            "networkProfile": {
+              "networkInterfaceConfigurations": [
+                {
+                  "name": "vmnic",
+                  "properties": {
+                    "primary": true,
+                    "ipConfigurations": [
+                      {
+                        "name": "ipconfig",
+                        "properties": {
+                          "subnet": {
+                            "id": "[parameters('subnetId')]"
+                          },
+                          "loadBalancerBackendAddressPools": [
+                            {
+                              "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'AKTO-LB', 'backend-pool')]"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "upgradePolicy": {
+            "mode": "Manual"
+          }
+        },
+        "sku": {
+          "name": "Standard_B16pls_v2",
+          "tier": "Standard",
+          "capacity": 2
+        }
+      }
+    ],
+    "outputs": {
+      "lbPublicIP": {
+        "type": "string",
+        "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', 'AKTO-PUBLIC-IP')).ipAddress]"
+      }
+    }
+  }
+  
