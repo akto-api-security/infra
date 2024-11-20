@@ -155,7 +155,7 @@ data "aws_vpc" "selected" {
 resource "aws_launch_configuration" "test_service_launch_configuration" {
   name_prefix          = "TestServiceLaunchConfiguration"
   image_id             = local.ami_id
-  instance_type        = "t3.medium"
+  instance_type        = "m5a.large"
   key_name             = var.key_pair
   iam_instance_profile = aws_iam_instance_profile.instance_profile.id
   security_groups      = [aws_security_group.service_security_group.id]
