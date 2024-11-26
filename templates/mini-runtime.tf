@@ -29,6 +29,13 @@ variable "database_abstractor_token" {
   type        = string
 }
 
+variable "cidr_blocks" {
+  description = "List of CIDR blocks allowed for ingress/egress"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+
 locals {
   mappings = {
     RegionMap = {
@@ -179,28 +186,22 @@ resource "aws_security_group" "akto_security_group" {
   vpc_id      = data.aws_vpc.selected.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
     from_port   = 4789
     to_port     = 4789
     protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.cidr_blocks
   }
   ingress {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.cidr_blocks
   }
   ingress {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.cidr_blocks
   }
 
   egress {
