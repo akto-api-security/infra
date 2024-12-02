@@ -3,25 +3,25 @@ version: '2.1'
 services:
 
   akto-api-security-testing-1:
-    image: aktosecurity/akto-api-testing:local
+    image: public.ecr.aws/aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
     restart: always
     mem_limit: 3300m
 
   akto-api-security-testing-2:
-    image: aktosecurity/akto-api-testing:local
+    image: public.ecr.aws/aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
     restart: always
     mem_limit: 3300m
 
   akto-api-security-testing-3:
-    image: aktosecurity/akto-api-testing:local
+    image: public.ecr.aws/aktosecurity/akto-api-testing:local
     env_file: ./docker-dashboard.env
     restart: always
     mem_limit: 3300m  
 
   akto-puppeteer-replay:
-    image: aktosecurity/akto-puppeteer-replay:latest
+    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
     ports:
       - "3000:3000"
     restart: always
