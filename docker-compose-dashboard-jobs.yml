@@ -10,6 +10,11 @@ services:
       - "8080:8080"
     depends_on:
       - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
 
   akto-internal:
     image: aktosecurity/akto-internal:local
