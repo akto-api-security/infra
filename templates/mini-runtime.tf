@@ -280,7 +280,7 @@ resource "aws_autoscaling_group" "akto_autoscaling_group" {
 # Network Load Balancer
 resource "aws_lb" "akto_nlb" {
   name               = "AktoNLB"
-  internal           = false
+  internal           = true
   load_balancer_type = "network"
   ip_address_type    = "ipv4"
   subnets            = [var.subnet_id]
