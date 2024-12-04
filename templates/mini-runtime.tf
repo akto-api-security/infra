@@ -228,7 +228,7 @@ resource "aws_launch_configuration" "akto_launch_configuration" {
   # Specify root block device for the instance
   root_block_device {
     volume_size           = 20   # Specify 20 GB volume size
-    volume_type           = "gp2"
+    volume_type           = "gp3"
     delete_on_termination = true
   }
 
