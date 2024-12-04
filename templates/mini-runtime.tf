@@ -29,13 +29,6 @@ variable "database_abstractor_token" {
   type        = string
 }
 
-variable "cidr_blocks" {
-  description = "List of CIDR blocks allowed for ingress/egress"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-
 locals {
   mappings = {
     RegionMap = {
@@ -158,22 +151,6 @@ resource "aws_iam_role_policy" "get_akto_lambda_policy" {
   })
 }
 
-# Lambda Function
-resource "aws_lambda_function" "get_akto_setup_details" {
-  function_name = "GetAktoSetupDetails"
-  runtime       = "nodejs16.x"
-  role          = aws_iam_role.lambda_execution_role.arn
-  handler       = "index.handler"
-  timeout       = 60
-  environment {
-    variables = {
-      TARGET_LB = aws_lb.akto_nlb.dns_name
-    }
-  }
-  s3_bucket = "akto-setup-${var.region}"
-  s3_key    = "templates/get-akto-setup-details.zip"
-}
-
 # IAM Role for EC2 Instances
 resource "aws_iam_instance_profile" "iam_instance_profile" {
   name = "AktoInstanceProfile"
@@ -186,22 +163,48 @@ resource "aws_security_group" "akto_security_group" {
   vpc_id      = data.aws_vpc.selected.id
 
   ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
     from_port   = 4789
     to_port     = 4789
     protocol    = "udp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Security Group
+resource "aws_security_group" "lb_security_group" {
+  name_prefix = "lb-security-group"
+  vpc_id      = data.aws_vpc.selected.id
+
+  ingress {
+    from_port   = 9092
+    to_port     = 9092
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -281,6 +284,7 @@ resource "aws_lb" "akto_nlb" {
   load_balancer_type = "network"
   ip_address_type    = "ipv4"
   subnets            = [var.subnet_id]
+  security_groups    = [aws_security_group.lb_security_group.id]
 
   enable_cross_zone_load_balancing = true
 }
@@ -294,13 +298,12 @@ resource "aws_lb_target_group" "akto_traffic_mirroring_target_group" {
 
   health_check {
     enabled             = true
-    interval            = 10
-    path                = "/metrics"
-    port                = "8000"
-    protocol            = "HTTP"
-    timeout             = 6
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
+    interval            = 10        # Interval between health checks in seconds
+    port                = "9092"    # Change the health check port to 9092
+    protocol            = "TCP"     # Change the protocol to TCP
+    timeout             = 6         # Timeout for health check response in seconds
+    healthy_threshold   = 2         # Number of successful checks before marking healthy
+    unhealthy_threshold = 2         # Number of failed checks before marking unhealthy
   }
 }
 
@@ -312,13 +315,12 @@ resource "aws_lb_target_group" "akto_kafka_target_group" {
 
   health_check {
     enabled             = true
-    interval            = 10
-    path                = "/metrics"
-    port                = "8000"
-    protocol            = "HTTP"
-    timeout             = 6
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
+    interval            = 10        # Interval between health checks in seconds
+    port                = "9092"    # Change the health check port to 9092
+    protocol            = "TCP"     # Change the protocol to TCP
+    timeout             = 6         # Timeout for health check response in seconds
+    healthy_threshold   = 2         # Number of successful checks before marking healthy
+    unhealthy_threshold = 2         # Number of failed checks before marking unhealthy
   }
 }
 
