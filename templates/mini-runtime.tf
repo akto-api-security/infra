@@ -217,23 +217,31 @@ resource "aws_security_group" "lb_security_group" {
 }
 
 # Launch Configuration
-resource "aws_launch_configuration" "akto_launch_configuration" {
-  name_prefix            = "AktoASGLaunchConfiguration"
-  image_id               = local.ami_id
-  instance_type          = "m5a.xlarge"
-  key_name               = var.key_pair
-  iam_instance_profile   = aws_iam_instance_profile.iam_instance_profile.id
-  security_groups        = [aws_security_group.akto_security_group.id]
-  associate_public_ip_address = false
+resource "aws_launch_template" "akto_launch_template" {
+  name_prefix   = "AktoLaunchTemplate"
+  image_id      = local.ami_id
+  instance_type = "m5a.xlarge"
+  key_name      = var.key_pair
 
-  # Specify root block device for the instance
-  root_block_device {
-    volume_size           = 20   # Specify 20 GB volume size
-    volume_type           = "gp3"
-    delete_on_termination = true
+  iam_instance_profile {
+    name = aws_iam_instance_profile.iam_instance_profile.name
   }
 
-  user_data = <<-EOF
+  network_interfaces {
+    security_groups = [aws_security_group.akto_security_group.id]
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  user_data = base64encode(<<-EOF
     #!/bin/bash -xe
     export DATABASE_ABSTRACTOR_SERVICE_URL='${var.database_abstractor_url}'
     export DATABASE_ABSTRACTOR_SERVICE_TOKEN='${var.database_abstractor_token}'
@@ -263,6 +271,7 @@ resource "aws_launch_configuration" "akto_launch_configuration" {
     sudo chmod 700 cf-deploy-akto-start
     ./cf-deploy-akto-start < <(echo 'test')
   EOF
+  )
 }
 
 # Auto Scaling Group
@@ -275,7 +284,10 @@ resource "aws_autoscaling_group" "akto_autoscaling_group" {
     aws_lb_target_group.akto_traffic_mirroring_target_group.arn,
     aws_lb_target_group.akto_kafka_target_group.arn,
   ]
-  launch_configuration = aws_launch_configuration.akto_launch_configuration.name
+  launch_template {
+    id      = aws_launch_template.akto_launch_template.id
+    version = "$Latest"
+  }
 }
 
 # Network Load Balancer
