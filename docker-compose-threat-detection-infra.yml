@@ -15,6 +15,7 @@ services:
     image: confluentinc/cp-kafka:7.7.2
     container_name: kafka-internal
     hostname: kafka-internal
+    user: root
     ports:
       - "39092:39092" # PLAINTEXT_HOST listener
       - "49092:49092" # PLAINTEXT listener
