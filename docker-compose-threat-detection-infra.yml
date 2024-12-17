@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_container
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: akto
+      POSTGRES_PASSWORD: akto
+      POSTGRES_DB: 1000000
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  kafka-internal:
+    image: confluentinc/cp-kafka:7.7.2
+    container_name: kafka-internal
+    hostname: kafka-internal
+    ports:
+      - "39092:39092" # PLAINTEXT_HOST listener
+      - "49092:49092" # PLAINTEXT listener
+      - "49093:49093" # CONTROLLER listener
+    environment:
+      # Kafka Node Configuration
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-internal:49092,PLAINTEXT_HOST://localhost:39092
+      KAFKA_LISTENERS: PLAINTEXT://kafka-internal:49092,CONTROLLER://kafka-internal:49093,PLAINTEXT_HOST://0.0.0.0:39092
+      
+      # Kafka Roles and Controller Quorum
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-internal:49093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Other Configurations
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+    volumes:
+        - ./data-kafka-internal-data:/var/lib/kafka/data
+        - ./data-kafka-internal-secrets:/etc/kafka/secrets
+
+volumes:
+  postgres_data:
