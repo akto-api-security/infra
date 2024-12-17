@@ -45,7 +45,9 @@ services:
       image: ag60/akto-threat-detection-backend
       env_file: ./docker-threat-detection-backend.env
       restart: always
-      mem_limit: 4g
+      ports:
+        - "8980:8980"
+        - "9090:9090"
       depends_on:
         - kafka-internal
         - mongo
