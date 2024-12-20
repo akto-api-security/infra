@@ -1,45 +1,55 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: postgres_container
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: akto
-      POSTGRES_PASSWORD: akto
-      POSTGRES_DB: 1000000
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  kafka-internal:
-    image: confluentinc/cp-kafka:7.7.2
-    container_name: kafka-internal
-    hostname: kafka-internal
+  kafka-central:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: kafka-central
+    hostname: kafka-central
     user: root
     ports:
-      - "39092:39092" # PLAINTEXT_HOST listener
-      - "49092:49092" # PLAINTEXT listener
-      - "49093:49093" # CONTROLLER listener
+      - "9093:9093" # CONTROLLER listener
+      - "9094:9094"
     environment:
-      # Kafka Node Configuration
-      KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-internal:49092,PLAINTEXT_HOST://localhost:39092
-      KAFKA_LISTENERS: PLAINTEXT://kafka-internal:49092,CONTROLLER://kafka-internal:49093,PLAINTEXT_HOST://0.0.0.0:39092
-      
-      # Kafka Roles and Controller Quorum
+      # Broker ID
+      KAFKA_BROKER_ID: 1
+
+      # KRaft mode settings
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-internal:49093
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+
+      # Kafka listeners and advertised listeners
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,LISTENER_DOCKER_EXTERNAL_DIFFHOST://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092, LISTENER_DOCKER_EXTERNAL_DIFFHOST://10.0.143.202:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_DIFFHOST:PLAINTEXT
+
+      # Specify controller listener names
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
 
-      # Other Configurations
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      # Log directories
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
 
+      # Minimum in-sync replicas
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # Offsets topic replication factor
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      # Transaction state log replication factor and min ISR
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    
     volumes:
-        - ./data-kafka-internal-data:/var/lib/kafka/data
-        - ./data-kafka-internal-secrets:/etc/kafka/secrets
+        - ./data-kafka-central-data:/var/lib/kafka/data
+        - ./data-kafka-central-secrets:/etc/kafka/secrets
+
+  redis-central:
+    image: redis:latest
+    container_name: redis-central
+    hostname: redis-central
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
 volumes:
-  postgres_data:
+  redis_data:
