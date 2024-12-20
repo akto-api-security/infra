@@ -1,0 +1,53 @@
+version: '3.3'
+
+services:
+  mongo:
+    container_name: mongo
+    image: mongo
+    restart: on-failure:10
+    volumes:
+      - ./data:/data/db
+    ports:
+      - "27017:27017"
+
+
+  kafka-internal:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: kafka-internal
+    hostname: kafka-internal
+    user: root
+    ports:
+      - "29092:29092" # PLAINTEXT_HOST listener
+      - "19092:19092" # PLAINTEXT listener
+      - "9093:9093" # CONTROLLER listener
+    environment:
+      # Kafka Node Configuration
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT, LISTENER_DOCKER_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka-internal:19092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka-internal:19092,CONTROLLER://kafka-internal:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      
+      # Kafka Roles and Controller Quorum
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-internal:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Other Configurations
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+    volumes:
+        - ./data-kafka-internal-data:/var/lib/kafka/data
+        - ./data-kafka-internal-secrets:/etc/kafka/secrets
+
+  backend:
+      image: ag60/akto-threat-detection-backend
+      env_file: ./docker-threat-detection-backend.env
+      restart: always
+      ports:
+        - "8980:8980"
+        - "9090:9090"
+      depends_on:
+        - kafka-internal
+        - mongo

@@ -1,0 +1,55 @@
+services:
+  kafka-central:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: kafka-central
+    hostname: kafka-central
+    user: root
+    ports:
+      - "9093:9093" # CONTROLLER listener
+      - "9094:9094"
+    environment:
+      # Broker ID
+      KAFKA_BROKER_ID: 1
+
+      # KRaft mode settings
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+
+      # Kafka listeners and advertised listeners
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,LISTENER_DOCKER_EXTERNAL_DIFFHOST://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092, LISTENER_DOCKER_EXTERNAL_DIFFHOST://10.0.143.202:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_DIFFHOST:PLAINTEXT
+
+      # Specify controller listener names
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Log directories
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+      # Minimum in-sync replicas
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # Offsets topic replication factor
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      # Transaction state log replication factor and min ISR
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    
+    volumes:
+        - ./data-kafka-central-data:/var/lib/kafka/data
+        - ./data-kafka-central-secrets:/etc/kafka/secrets
+
+  redis-central:
+    image: redis:latest
+    container_name: redis-central
+    hostname: redis-central
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
