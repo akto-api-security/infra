@@ -40,6 +40,7 @@ services:
     depends_on:
       - "prometheus"
     container_name: grafana
+    env_file: ./docker-prometheus-grafana.env
 
 volumes:
   grafana-storage:
