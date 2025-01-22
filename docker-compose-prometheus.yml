@@ -1,4 +1,4 @@
-version: '3'
+version: '2.1'
 
 services:
 
@@ -12,6 +12,7 @@ services:
       options:
         max-size: "1g"
         max-file: "2"
+    mem_limit: 10g
     container_name: prometheus-pushgateway
 
   prometheus:
@@ -24,6 +25,7 @@ services:
       - prom-data:/prometheus
     depends_on:
       - "prometheus-pushgateway"
+    mem_limit: 5g
     container_name: prometheus
 
   grafana:
@@ -36,6 +38,7 @@ services:
     depends_on:
       - "prometheus"
     container_name: grafana
+    mem_limit: 1g
     env_file: ./docker-prometheus-grafana.env
 
 volumes:
