@@ -59,7 +59,7 @@ services:
       - "5000:5000"
     depends_on:
       - kafka1
-    mem_limit: 6g
+    mem_limit: 3g
 
   usage-processor:
     image: aktosecurity/usage-processor:latest
@@ -67,7 +67,7 @@ services:
     env_file: ./docker-usage.env
     depends_on:
       - kafka1
-    mem_limit: 1g
+    mem_limit: 4g
 
   akto-hello-world:
     image: hotavneesh/hello-world-server:latest
