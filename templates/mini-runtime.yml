@@ -197,80 +197,87 @@ Resources:
       GroupDescription: 'Enable the ports Akto requires (22, 4789, 8000, 9092)'
       SecurityGroupIngress: []
       SecurityGroupEgress: []
-  AktoASGLaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
-    DependsOn:
-      - AktoNLB
-    Properties:
-      ImageId: !FindInMap
-        - RegionMap
-        - !Ref 'AWS::Region'
-        - AMI
-      InstanceType: m5a.xlarge
-      KeyName: !Ref KeyPair
-      AssociatePublicIpAddress: 'false'
-      IamInstanceProfile: !Ref IamInstanceProfile
-      SecurityGroups:
-        - !Ref AktoSecurityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            DeleteOnTermination: 'true'
-            VolumeSize: '50'
-            Encrypted: true
-      MetadataOptions:
-        HttpTokens: required
-      UserData: !Base64
-        'Fn::Join':
-          - |+
 
-          - - '#!/bin/bash -xe'
-            - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_URL=''${DatabaseAbstractorUrl}'''
-            - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_TOKEN=''${DatabaseAbstractorToken}'''
-            - !Sub 'export AKTO_KAFKA_IP=''${AktoNLB.DNSName}'''
-            - touch /tmp/hello.txt
-            - touch ~/hello.txt
-            - sudo yum update -y
-            - sudo yum install -y python python-setuptools
-            - sudo yum install -y docker
-            - sudo dockerd&
-            - sudo systemctl enable /usr/lib/systemd/system/docker.service
-            - sudo mkdir -p /opt/aws/bin
-            - export COMPOSE_FILE=docker-compose-mini-runtime.yml
-            - >-
-              sudo wget
-              https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-            - >-
-              sudo python -m easy_install --script-dir /opt/aws/bin
-              aws-cfn-bootstrap-latest.tar.gz
-            - >-
-              curl -fsSL
-              'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto'
-              > cf-deploy-akto
-            - sudo chmod 700 cf-deploy-akto
-            - ./cf-deploy-akto < <(echo 'test')
-            - sudo echo >> ~/akto/infra/docker-runtime.env
-            - >-
-              sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
-              ~/akto/infra/docker-runtime.env
-            - >-
-              sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
-              ~/akto/infra/docker-mini-runtime.env
-            - >-
-              sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
-              ~/akto/infra/docker-mini-runtime.env
-            - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
-            - >-
-              curl -fsSL
-              'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start'
-              > cf-deploy-akto-start
-            - sudo chmod 700 cf-deploy-akto-start
-            - ./cf-deploy-akto-start < <(echo 'test')
+  AktoLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: AktoLaunchTemplate
+      LaunchTemplateData:
+        ImageId: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - AMI
+        InstanceType: m5a.xlarge
+        KeyName: !Ref KeyPair
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: false
+            SubnetId: !Ref SubnetId
+            DeviceIndex: 0
+            Groups:
+              - !Ref AktoSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt IamInstanceProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: true
+              VolumeSize: 50
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+        UserData: !Base64
+          Fn::Join:
+            - "\n"
+            - - '#!/bin/bash -xe'
+              - !Sub "export DATABASE_ABSTRACTOR_SERVICE_URL=${DatabaseAbstractorUrl}"
+              - !Sub "export DATABASE_ABSTRACTOR_SERVICE_TOKEN=${DatabaseAbstractorToken}"
+              - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
+              - touch /tmp/hello.txt
+              - touch ~/hello.txt
+              - sudo yum update -y
+              - sudo yum install -y python python-setuptools
+              - sudo yum install -y docker
+              - sudo dockerd&
+              - sudo systemctl enable /usr/lib/systemd/system/docker.service
+              - sudo mkdir -p /opt/aws/bin
+              - export COMPOSE_FILE=docker-compose-mini-runtime.yml
+              - >-
+                sudo wget
+                https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              - >-
+                sudo python -m easy_install --script-dir /opt/aws/bin
+                aws-cfn-bootstrap-latest.tar.gz
+              - >-
+                curl -fsSL
+                'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto'
+                > cf-deploy-akto
+              - sudo chmod 700 cf-deploy-akto
+              - ./cf-deploy-akto < <(echo 'test')
+              - sudo echo >> ~/akto/infra/docker-runtime.env
+              - >-
+                sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
+                ~/akto/infra/docker-runtime.env
+              - >-
+                sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
+                ~/akto/infra/docker-mini-runtime.env
+              - >-
+                sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
+                ~/akto/infra/docker-mini-runtime.env
+              - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
+              - >-
+                curl -fsSL
+                'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start'
+                > cf-deploy-akto-start
+              - sudo chmod 700 cf-deploy-akto-start
+              - ./cf-deploy-akto-start < <(echo 'test')
+
   AktoAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref AktoASGLaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoLaunchTemplate
+        Version: !GetAtt AktoLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - !Ref SubnetId
       TargetGroupARNs:
