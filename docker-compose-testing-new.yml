@@ -52,8 +52,12 @@ services:
 
   akto-api-security-testing-1:
     image: aktosecurity/akto-api-testing:local
-    env_file: ./docker-dashboard.env
+    env_file: ./docker-testing.env
     restart: always
+    depends_on:
+      - kafka1
+    volumes:
+      - ./current-testing-state/files:/app/testing-info
 
   akto-puppeteer-replay:
     image: aktosecurity/akto-puppeteer-replay:latest
@@ -61,8 +65,6 @@ services:
       - "3000:3000"
     restart: always
     mem_limit: 3300m
-    depends_on:
-      - kafka1
 
   watchtower:
     image: containrrr/watchtower
