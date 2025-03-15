@@ -5,7 +5,7 @@ services:
     image: aktosecurity/akto-api-security-dashboard:local
     env_file: ./docker-dashboard.env
     restart: always
-    mem_limit: 15g
+    mem_limit: 6g
     ports: 
       - "8080:8080"
     depends_on:
