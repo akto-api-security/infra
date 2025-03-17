@@ -54,6 +54,7 @@ services:
     image: aktosecurity/akto-api-testing:local
     env_file: ./docker-testing.env
     restart: always
+    cpu_quota: 180000
     depends_on:
       - kafka1
     volumes:
