@@ -2,6 +2,10 @@
 
 # Initial variables
 counter=0
+running=true
+
+# Handle Ctrl+C (SIGINT) to stop the script cleanly
+trap 'echo "Stopping capture..."; running=false' INT
 
 # Check if the environment variable MIRRORING_INTERFACE is set, if not default to "any"
 interface="${MIRRORING_INTERFACE:-any}"
@@ -34,7 +38,7 @@ while [ $i -le $modules ]; do
   i=$((i + 1))
 done
 
-while true; do
+while $running; do
   # Check current disk usage
   current_usage=$(df -P "$base_dir" | awk '{ gsub("%",""); capacity = $5 }; END { print capacity }')
 
@@ -55,3 +59,5 @@ while true; do
 
   counter=$((counter + 1))
 done
+
+echo "tcpdump script exited."
