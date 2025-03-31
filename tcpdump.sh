@@ -3,8 +3,8 @@
 # Initial variables
 counter=0
 
-# Check if the environment variable MIRRORING_INTERFACE is set, if not default to "eth0"
-interface="${MIRRORING_INTERFACE:-eth0}"
+# Check if the environment variable MIRRORING_INTERFACE is set, if not default to "any"
+interface="${MIRRORING_INTERFACE:-any}"
 
 # Check if the environment variable AKTO_MODULES is set, if not default to 2
 modules="${AKTO_MODULES:-2}"
