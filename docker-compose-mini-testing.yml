@@ -6,6 +6,7 @@ services:
       RUNTIME_MODE: hybrid
       DATABASE_ABSTRACTOR_SERVICE_TOKEN: <token>
       PUPPETEER_REPLAY_SERVICE_URL: "http://akto-puppeteer-replay:3000"
+      AKTO_LOG_LEVEL: WARN
     restart: always
 
   akto-api-security-puppeteer-replay:
