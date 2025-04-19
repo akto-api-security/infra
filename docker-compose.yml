@@ -69,6 +69,14 @@ services:
     depends_on:
       - mongo
 
+  akto-api-security-testing:
+    image: public.ecr.aws/aktosecurity/akto-api-testing:latest
+    env_file: ./docker.env
+    restart: always
+    mem_limit: 4g
+    depends_on:
+      - mongo
+
   akto-api-security-runtime:
     image: public.ecr.aws/aktosecurity/akto-api-security-runtime:latest
     env_file: ./docker.env
