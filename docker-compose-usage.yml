@@ -60,6 +60,11 @@ services:
     depends_on:
       - kafka1
     mem_limit: 3g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"
 
   usage-processor:
     image: aktosecurity/usage-processor:latest
@@ -68,9 +73,19 @@ services:
     depends_on:
       - kafka1
     mem_limit: 4g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"    
 
   akto-hello-world:
     image: hotavneesh/hello-world-server:latest
     restart: always
     ports: 
       - "8000:8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"
