@@ -60,16 +60,6 @@ services:
     volumes:
       - ./current-testing-state/files:/app/testing-info
 
-  akto-api-security-testing-2:
-    image: aktosecurity/akto-api-testing:local
-    env_file: ./docker-testing.env
-    restart: always
-    cpu_quota: 180000
-    depends_on:
-      - kafka1
-    volumes:
-      - ./current-testing-state-1/files:/app/testing-info
-
   akto-puppeteer-replay:
     image: aktosecurity/akto-puppeteer-replay:latest
     ports:
