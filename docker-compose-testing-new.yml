@@ -59,6 +59,11 @@ services:
       - kafka1
     volumes:
       - ./current-testing-state/files:/app/testing-info
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
 
   akto-puppeteer-replay:
     image: aktosecurity/akto-puppeteer-replay:latest
@@ -76,3 +81,14 @@ services:
     mem_limit: 200m
     labels:
       com.centurylinklabs.watchtower.enable: "false"
+
+  akto-hello-world:
+    image: public.ecr.aws/aktosecurity/hello-world-server:latest
+    restart: always
+    ports: 
+      - "8000:8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
