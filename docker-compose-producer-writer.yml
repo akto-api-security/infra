@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   zoo1:
-    image: confluentinc/cp-zookeeper:6.2.1
+    image: confluentinc/cp-zookeeper:7.9.1-1-ubi8
     restart: on-failure:10
     hostname: zoo1
     user: "0"  
@@ -19,7 +19,7 @@ services:
       ZOOKEEPER_SERVERS: zoo1:2888:3888
 
   kafka1:
-    image: confluentinc/cp-kafka:6.2.1
+    image: confluentinc/cp-kafka:7.9.1-1-ubi8
     restart: on-failure:10
     hostname: kafka1
     user: "0"
@@ -53,7 +53,7 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-producer.env
     restart: always
-    mem_limit: 7g
+    mem_limit: 13g
     ports: 
       - "9001:8080"
     depends_on:
