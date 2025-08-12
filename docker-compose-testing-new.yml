@@ -90,5 +90,5 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "1g"
-        max-file: "3"
+        max-size: "200m"
+        max-file: "2"
