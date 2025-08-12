@@ -62,8 +62,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "1g"
-        max-file: "3"
+        max-size: "300m"
+        max-file: "2"
 
   akto-puppeteer-replay:
     image: aktosecurity/akto-puppeteer-replay:latest
