@@ -69,8 +69,21 @@ services:
     env_file: ./docker-writes-consumer.env
     restart: always
     mem_limit: 4g
-    ports: 
-      - "9002:8080"
+    depends_on:
+      - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
+
+  akto-api-security-writes-consumer-2:
+    image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
+    env_file: ./docker-writes-consumer.env
+    environment:
+      AKTO_KAFKA_ACCOUNT_ID: 1736798101
+    restart: always
+    mem_limit: 4g
     depends_on:
       - kafka1
     logging:
@@ -84,8 +97,6 @@ services:
     env_file: ./docker-writes-consumer-traffic.env
     restart: always
     mem_limit: 4g
-    ports: 
-      - "9003:8080"
     depends_on:
       - kafka1
     logging:
