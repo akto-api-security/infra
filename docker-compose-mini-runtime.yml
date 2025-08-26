@@ -87,6 +87,13 @@ services:
     ports: 
       - "8000:8000"
 
+  threat-detection:
+    image: aktosecurity/akto-threat-detection:latest
+    env_file: ./docker-threat-detection.env
+    restart: always
+    depends_on:
+      - kafka1
+
   watchtower:
     image: containrrr/watchtower
     restart: always
