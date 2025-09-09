@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   zoo1:
-    image: public.ecr.aws/aktosecurity/confluentinc-cp-zookeeper:7.9.1-1-ubi8
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-zookeeper:7.9.2-1-ubi8
     restart: on-failure:10
     hostname: zoo1
     user: "0"  
@@ -19,7 +19,7 @@ services:
       ZOOKEEPER_SERVERS: zoo1:2888:3888
 
   kafka1:
-    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:7.9.1-1-ubi8
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:7.9.2-1-ubi8
     restart: on-failure:10
     hostname: kafka1
     user: "0"
