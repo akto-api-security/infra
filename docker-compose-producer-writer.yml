@@ -105,12 +105,3 @@ services:
         max-size: "1g"
         max-file: "3"
 
-  watchtower:
-    image: containrrr/watchtower
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    env_file: ./watchtower.env
-    mem_limit: 200m
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
