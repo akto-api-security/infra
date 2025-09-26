@@ -98,6 +98,20 @@ services:
       options:
         max-size: "100m"
         max-file: "2"
+    
+  data-ingestion-service:
+    image: coastaldemigod/data-ingestion-service
+    env_file: ./data-ingestion-docker.env
+    restart: always
+    ports:
+      - "9091:8080"
+    depends_on:
+      - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"
 
   watchtower:
     image: containrrr/watchtower
