@@ -1,0 +1,19 @@
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Delete old images when a new one is pushed",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": [
+          "*latest*"
+        ],
+        "countType": "imageCountMoreThan",
+        "countNumber": 1
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
+}
