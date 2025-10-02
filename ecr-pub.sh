@@ -96,7 +96,7 @@ for repo in $(echo "$ECR_PUBLIC_REPOS" | jq -c '.[]'); do
     
     for tag in $(echo "$latest_image_tags" | tr ',' '\n'); do
         echo "Tagging image: $uri:$tag as $private_repo_uri:$tag"
-        docker tag "$uri:$tag" "$private_repo_uri:$tag"
+        docker tag "$uri:$pull_tag" "$private_repo_uri:$tag"
         
         echo "Pushing image: $private_repo_uri:$tag"
         docker push "$private_repo_uri:$tag" > /dev/null
