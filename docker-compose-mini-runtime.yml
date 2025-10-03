@@ -76,6 +76,23 @@ services:
     restart: always
     ports: 
       - "8000:8000"
+    
+  redis-central:
+    image: redis:latest
+    container_name: redis-central
+    hostname: redis-central
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  threat-detection:
+    image: aktosecurity/akto-threat-detection:latest
+    env_file: ./docker-threat-detection.env
+    restart: always
+    depends_on:
+      - kafka1
+      - redis-central
 
   watchtower:
     image: containrrr/watchtower
@@ -85,3 +102,6 @@ services:
     env_file: ./watchtower.env
     labels:
       com.centurylinklabs.watchtower.enable: "false"
+
+volumes:
+  redis_data:

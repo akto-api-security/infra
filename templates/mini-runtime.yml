@@ -12,6 +12,13 @@ Parameters:
     Type: String
   DatabaseAbstractorToken:
     Type: String
+  AllowedCidr:
+    Type: String
+    Description: CIDR block allowed to access the Akto services
+    Default: '0.0.0.0/32'
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VPC ID where resources will be deployed
 Mappings:
   RegionMap:
     af-south-1:
@@ -59,224 +66,114 @@ Mappings:
     us-west-2:
       AMI: ami-0ec021424fb596d6c
 Resources:
-  GetAktoSetupDetailsLambdaBasicExecutionRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: GetAktoSetupDetailsExecuteLambda
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:DescribeNetworkInterfaces'
-                  - 'ec2:DescribeTrafficMirrorSessions'
-                  - 'ec2:DescribeInstances'
-                  - 'ec2:DescribeVpcs'
-                  - 'elasticloadbalancing:DescribeLoadBalancers'
-                  - 'elasticloadbalancing:DescribeTargetGroups'
-                  - 'elasticloadbalancing:DescribeTargetHealth'
-                Resource: '*'
-  GetAktoSetupDetails:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Runtime: nodejs16.x
-      Timeout: 60
-      Role: !GetAtt
-        - GetAktoSetupDetailsLambdaBasicExecutionRole
-        - Arn
-      Handler: index.handler
-      Environment:
-        Variables:
-          TARGET_LB: !Ref AktoNLB
-      Code:
-        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
-        S3Key: templates/get-akto-setup-details.zip
-  GetVpcDetailsLambdaRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: DescribeAssetsPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:DescribeVpcs'
-                  - 'ec2:DescribeSubnets'
-                Resource: '*'
-  GetVpcDetailsLambda:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Description: Look up info from a VPC
-      Handler: index.handler
-      Runtime: nodejs16.x
-      Timeout: 30
-      Role: !GetAtt
-        - GetVpcDetailsLambdaRole
-        - Arn
-      Environment:
-        Variables:
-          SUBNET_ID: !Ref SubnetId
-      Code:
-        ZipFile: >
-          var SUBNET_ID = process.env.SUBNET_ID; var aws = require('aws-sdk');
-          var response = require('cfn-response'); var ec2 = new aws.EC2();
-          exports.handler = async function(event, context) {
-              if (event.RequestType == 'Delete') {
-                 await response.send(event, context, 'SUCCESS');
-                 return;
-              }
-              var params = {
-                 SubnetIds: [SUBNET_ID] 
-              };
-              var subnets = await ec2.describeSubnets(params).promise().catch(err => {
-                 console.error(err);
-              });
-              await response.send(event, context, 'SUCCESS', {VpcId: subnets['Subnets'][0]['VpcId']})
-          };
-  CustomSourceGetVpcDetails:
-    Type: 'AWS::CloudFormation::CustomResource'
-    Properties:
-      ServiceToken: !GetAtt
-        - GetVpcDetailsLambda
-        - Arn
-  IamInstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      Path: /
-      Roles:
-        - !Ref RefreshHandlerLambdaBasicExecutionRole
-  RefreshHandlerLambdaBasicExecutionRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyName: InvokeLambdaPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Resource:
-                  - !GetAtt
-                    - DashboardInstanceRefreshHandler
-                    - Arn
-                  - !GetAtt
-                    - TrafficMirroringInstanceRefreshHandler
-                    - Arn
-                Action: 'lambda:InvokeFunction'
   AktoSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      VpcId: !GetAtt
-        - CustomSourceGetVpcDetails
-        - VpcId
-      GroupDescription: 'Enable the ports Akto requires (22, 4789, 8000, 9092)'
-      SecurityGroupIngress: []
-      SecurityGroupEgress: []
-  AktoASGLaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
-    DependsOn:
-      - AktoNLB
-    Properties:
-      ImageId: !FindInMap
-        - RegionMap
-        - !Ref 'AWS::Region'
-        - AMI
-      InstanceType: m5a.xlarge
-      KeyName: !Ref KeyPair
-      AssociatePublicIpAddress: 'false'
-      IamInstanceProfile: !Ref IamInstanceProfile
-      SecurityGroups:
-        - !Ref AktoSecurityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            DeleteOnTermination: 'true'
-            VolumeSize: '50'
-            Encrypted: true
-      MetadataOptions:
-        HttpTokens: required
-      UserData: !Base64
-        'Fn::Join':
-          - |+
+      VpcId: !Ref VpcId
+      GroupDescription: 'Enable the ports Akto requires (22, 8000, 9092)'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: !Ref AllowedCidr
+        - IpProtocol: tcp
+          FromPort: 9092
+          ToPort: 9092
+          CidrIp: !Ref AllowedCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
 
-          - - '#!/bin/bash -xe'
-            - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_URL=''${DatabaseAbstractorUrl}'''
-            - !Sub 'export DATABASE_ABSTRACTOR_SERVICE_TOKEN=''${DatabaseAbstractorToken}'''
-            - !Sub 'export AKTO_KAFKA_IP=''${AktoNLB.DNSName}'''
-            - touch /tmp/hello.txt
-            - touch ~/hello.txt
-            - sudo yum update -y
-            - sudo yum install -y python python-setuptools
-            - sudo yum install -y docker
-            - sudo dockerd&
-            - sudo systemctl enable /usr/lib/systemd/system/docker.service
-            - sudo mkdir -p /opt/aws/bin
-            - export COMPOSE_FILE=docker-compose-mini-runtime.yml
-            - >-
-              sudo wget
-              https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-            - >-
-              sudo python -m easy_install --script-dir /opt/aws/bin
-              aws-cfn-bootstrap-latest.tar.gz
-            - >-
-              curl -fsSL
-              'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto'
-              > cf-deploy-akto
-            - sudo chmod 700 cf-deploy-akto
-            - ./cf-deploy-akto < <(echo 'test')
-            - sudo echo >> ~/akto/infra/docker-runtime.env
-            - >-
-              sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
-              ~/akto/infra/docker-runtime.env
-            - >-
-              sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
-              ~/akto/infra/docker-mini-runtime.env
-            - >-
-              sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
-              ~/akto/infra/docker-mini-runtime.env
-            - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
-            - >-
-              curl -fsSL
-              'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start'
-              > cf-deploy-akto-start
-            - sudo chmod 700 cf-deploy-akto-start
-            - ./cf-deploy-akto-start < <(echo 'test')
+  AktoLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: AktoLaunchTemplate
+      LaunchTemplateData:
+        ImageId: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - AMI
+        InstanceType: m6a.xlarge
+        KeyName: !Ref KeyPair
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true
+            SubnetId: !Ref SubnetId
+            DeviceIndex: 0
+            Groups:
+              - !Ref AktoSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: true
+              VolumeSize: 50
+              Encrypted: true
+        MetadataOptions:
+          HttpTokens: required
+        UserData: !Base64
+          Fn::Join:
+            - "\n"
+            - - '#!/bin/bash -xe'
+              - !Sub "export DATABASE_ABSTRACTOR_SERVICE_URL=${DatabaseAbstractorUrl}"
+              - !Sub "export DATABASE_ABSTRACTOR_SERVICE_TOKEN=${DatabaseAbstractorToken}"
+              - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
+              - touch /tmp/hello.txt
+              - touch ~/hello.txt
+              - sudo yum update -y
+              - sudo yum install -y python python-setuptools
+              - sudo yum install -y docker
+              - sudo dockerd&
+              - sudo systemctl enable /usr/lib/systemd/system/docker.service
+              - sudo mkdir -p /opt/aws/bin
+              - export COMPOSE_FILE=docker-compose-mini-runtime.yml
+              - >-
+                sudo wget
+                https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              - >-
+                sudo python -m easy_install --script-dir /opt/aws/bin
+                aws-cfn-bootstrap-latest.tar.gz
+              - >-
+                curl -fsSL
+                'https://raw.githubusercontent.com/akto-api-security/infra/feature/add-threat-client-cft/cf-deploy-akto'
+                > cf-deploy-akto
+              - sudo chmod 700 cf-deploy-akto
+              - ./cf-deploy-akto < <(echo 'test')
+              - sudo echo >> ~/akto/infra/docker-runtime.env
+              - >-
+                sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
+                ~/akto/infra/docker-runtime.env
+              - >-
+                sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
+                ~/akto/infra/docker-mini-runtime.env
+              - >-
+                sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
+                ~/akto/infra/docker-mini-runtime.env
+              - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
+              - >-
+                sudo echo AKTO_THREAT_PROTECTION_BACKEND_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
+                ~/akto/infra/docker-threat-detection.env
+              - >-
+                sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
+                ~/akto/infra/docker-threat-detection.env
+              - >-
+                curl -fsSL
+                'https://raw.githubusercontent.com/akto-api-security/infra/feature/add-threat-client-cft/cf-deploy-akto-start'
+                > cf-deploy-akto-start
+              - sudo chmod 700 cf-deploy-akto-start
+              - ./cf-deploy-akto-start < <(echo 'test')
+
   AktoAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref AktoASGLaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AktoLaunchTemplate
+        Version: !GetAtt AktoLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - !Ref SubnetId
       TargetGroupARNs:
         - !Ref AktoTrafficMirroringTargetGroup
         - !Ref AktoKafkaTargetGroup
-      MaxSize: '10'
+      MaxSize: '1'
       MinSize: '1'
   AktoTargetTrackingNetworkPolicy:
     Type: 'AWS::AutoScaling::ScalingPolicy'
@@ -292,7 +189,7 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Type: network
-      Scheme: internal
+      Scheme: internet-facing
       IpAddressType: ipv4
       Subnets:
         - !Ref SubnetId
@@ -313,9 +210,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetType: instance
-      VpcId: !GetAtt
-        - CustomSourceGetVpcDetails
-        - VpcId
+      VpcId: !Ref VpcId
       Targets: []
   AktoKafkaTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
@@ -331,9 +226,7 @@ Resources:
       HealthCheckTimeoutSeconds: 6
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      VpcId: !GetAtt
-        - CustomSourceGetVpcDetails
-        - VpcId
+      VpcId: !Ref VpcId
       Targets: []
   AktoKafkaListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
@@ -344,160 +237,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AktoKafkaTargetGroup
-  DashboardInstanceRefreshHandler:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Handler: index.handler
-      Runtime: nodejs16.x
-      Timeout: 30
-      Role: !GetAtt
-        - InstanceRefreshHandlerLambdaRole
-        - Arn
-      Code:
-        ZipFile: >
-          var aws = require('aws-sdk'); var autoscaling = new aws.AutoScaling();
-          exports.handler = function(event, context) {
-            var params = {
-              AutoScalingGroupName: 'AktoDashboardAutoScalingGroup', 
-              Preferences: {
-                InstanceWarmup: 200, 
-                MinHealthyPercentage: 0
-              }
-            };
-          
-            autoscaling.startInstanceRefresh(params, function(err, data) {
-              if(err) { console.log(err) }
-              else { console.log(data) }
-            })
-          };
-  TrafficMirroringInstanceRefreshHandler:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Handler: index.handler
-      Runtime: nodejs16.x
-      Timeout: 30
-      Role: !GetAtt
-        - InstanceRefreshHandlerLambdaRole
-        - Arn
-      Code:
-        ZipFile: >
-          var aws = require('aws-sdk'); var autoscaling = new aws.AutoScaling();
-          exports.handler = function(event, context) {
-            var params = {
-              AutoScalingGroupName: 'AktoAutoScalingGroup', 
-              Preferences: {
-                InstanceWarmup: 200, 
-                MinHealthyPercentage: 0
-              }
-            };
-          
-            autoscaling.startInstanceRefresh(params, function(err, data) {
-              if(err) { console.log(err) }
-              else { console.log(data) }
-            })
-          };
-  InstanceRefreshHandlerLambdaRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /service-role/
-      Policies:
-        - PolicyName: lambdaExecution-DashboardInstanceRefreshHandler
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'autoscaling:StartInstanceRefresh'
-                  - 'autoscaling:Describe*'
-                  - 'autoscaling:UpdateAutoScalingGroup'
-                  - 'ec2:CreateLaunchTemplateVersion'
-                  - 'ec2:DescribeLaunchTemplates'
-                  - 'ec2:RunInstances'
-                Resource: '*'
-  ConfigureSecurityGroupsLambda:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Description: >-
-        Configure Security Groups for Runtime processor and Context analyzer
-        instances
-      Handler: lambda.lambda_handler
-      Runtime: python3.9
-      Timeout: 30
-      Role: !GetAtt
-        - ConfigureSecurityGroupsLambdaRole
-        - Arn
-      Environment:
-        Variables:
-          SUBNET_ID: !Ref SubnetId
-          CONTEXT_ANALYZER_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          RUNTIME_PROCESSOR_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          MODE: RUNTIME
-      Code:
-        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
-        S3Key: templates/configure_security_groups.zip
-  CustomSourceConfigureSecurityGroupsLambda:
-    Type: 'AWS::CloudFormation::CustomResource'
-    Properties:
-      ServiceToken: !GetAtt
-        - ConfigureSecurityGroupsLambda
-        - Arn
-  ConfigureSecurityGroupsLambdaRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: DescribeAssetsPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:DescribeVpcs'
-                  - 'ec2:DescribeSubnets'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'ec2:AuthorizeSecurityGroupIngress'
-                Resource:
-                  - !Sub >-
-                    arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
-        - PolicyName: AWSLambdaBasicExecutionRole
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
 Outputs:
   AktoNLB:
     Description: The IP address of the AktoNLB
