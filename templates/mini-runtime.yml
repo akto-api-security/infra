@@ -258,6 +258,7 @@ Resources:
               - >-
                 sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
                 ~/akto/infra/docker-runtime.env
+              - sudo echo " " >> ~/akto/infra/docker-mini-runtime.env
               - >-
                 sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >>
                 ~/akto/infra/docker-mini-runtime.env
@@ -266,10 +267,10 @@ Resources:
                 ~/akto/infra/docker-mini-runtime.env
               - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
               - >-
-                sudo echo "AKTO_THREAT_PROTECTION_BACKEND_TOKEN=token" >>
+                sudo sed -i "s/AKTO_THREAT_PROTECTION_BACKEND_TOKEN=.*/AKTO_THREAT_PROTECTION_BACKEND_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN/"
                 ~/akto/infra/docker-threat-detection.env
               - >-
-                sudo echo "DATABASE_ABSTRACTOR_SERVICE_TOKEN=token" >>
+                sudo sed -i "s/DATABASE_ABSTRACTOR_SERVICE_TOKEN=.*/DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN/"
                 ~/akto/infra/docker-threat-detection.env
               - >-
                 curl -fsSL

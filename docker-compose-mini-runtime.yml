@@ -68,7 +68,7 @@ services:
         max-file: "2"
   
   akto-api-security-mirror-api-logging:
-    image: public.ecr.aws/aktosecurity/mirror-api-logging:local
+    image: public.ecr.aws/aktosecurity/mirror-api-logging:k8s_agent
     env_file: ./docker-mini-runtime.env
     mem_limit: 4g    
     restart: always
