@@ -254,7 +254,7 @@ Resources:
                 > cf-deploy-akto
               - sudo chmod 700 cf-deploy-akto
               - ./cf-deploy-akto < <(echo 'test')
-              - sudo echo >> ~/akto/infra/docker-runtime.env
+              - sudo echo " " >> ~/akto/infra/docker-runtime.env
               - >-
                 sudo echo AKTO_MONGO_CONN=$AKTO_MONGO_CONN >>
                 ~/akto/infra/docker-runtime.env
@@ -265,6 +265,12 @@ Resources:
                 sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >>
                 ~/akto/infra/docker-mini-runtime.env
               - sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
+              - >-
+                sudo echo "AKTO_THREAT_PROTECTION_BACKEND_TOKEN=token" >>
+                ~/akto/infra/docker-threat-detection.env
+              - >-
+                sudo echo "DATABASE_ABSTRACTOR_SERVICE_TOKEN=token" >>
+                ~/akto/infra/docker-threat-detection.env
               - >-
                 curl -fsSL
                 'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start'
