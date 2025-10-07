@@ -117,5 +117,5 @@ for repo in $(echo "$ECR_PUBLIC_REPOS" | jq -c '.[]'); do
     docker rmi "$uri:$pull_tag" > /dev/null
 
     # Perform mirroring for a single repo when testing
-    break
+    # break
 done
