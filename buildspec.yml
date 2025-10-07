@@ -1,12 +1,9 @@
 version: 0.2
 
+# Execute script to mirror public ECR images to private ECR
+# Script source - https://github.com/akto-api-security/infra/blob/infra/aws_ecr_scanning/ecr-pub.sh
+
 phases:
-  pre_build:
-    commands:
-      - echo "Logging in to ecr"
-      - AWS_REGION="ap-south-1"
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
   post_build:
     commands:
       - echo "Running the ecr public to private mirror script"

@@ -81,6 +81,10 @@ check_private_repo_exists() {
 # Call the function and store output
 ECR_PUBLIC_REPOS=$(get_all_public_ecr_repos)
 
+# Login to ECR private
+echo -e "\nLogging into ECR Private Registry: $ECR_PRIVATE_REGISTRY"
+aws ecr get-login-password --region $ECR_PRIVATE_REGION | docker login --username AWS --password-stdin $ECR_PRIVATE_REGISTRY
+
 for repo in $(echo "$ECR_PUBLIC_REPOS" | jq -c '.[]'); do
     name=$(echo "$repo" | jq -r '.name')
     uri=$(echo "$repo" | jq -r '.uri')
@@ -111,4 +115,7 @@ for repo in $(echo "$ECR_PUBLIC_REPOS" | jq -c '.[]'); do
     # Remove the pulled image to save space
     echo "Removing image: $uri:$pull_tag to save space"
     docker rmi "$uri:$pull_tag" > /dev/null
+
+    # Perform mirroring for a single repo when testing
+    break
 done
