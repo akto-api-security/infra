@@ -1,18 +1,15 @@
 {
   "rules": [
     {
-      "rulePriority": 1,
-      "description": "Delete old images when a new one is pushed",
-      "selection": {
-        "tagStatus": "tagged",
-        "tagPatternList": [
-          "*latest*"
-        ],
-        "countType": "imageCountMoreThan",
-        "countNumber": 1
-      },
       "action": {
         "type": "expire"
+      },
+      "description": "Keep only three most recently pushed images",
+      "rulePriority": 1,
+      "selection": {
+        "tagStatus": "any",
+        "countType": "imageCountMoreThan",
+        "countNumber": 3
       }
     }
   ]
