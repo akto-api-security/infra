@@ -100,7 +100,7 @@ services:
         max-file: "2"
     
   data-ingestion-service:
-    image: coastaldemigod/data-ingestion-service
+    image: aktosecurity/data-ingestion-service
     env_file: ./data-ingestion-docker.env
     restart: always
     ports:
