@@ -7,8 +7,6 @@ services:
     restart: always
     entrypoint: ["/bin/sh", "-c"]
     command: ["./n8n-cron -brokers $$KAFKA_BROKERS -topic $$KAFKA_TOPIC -schedule '0 */10 * * * *'"]
-    networks:
-      - infra_default
 
   watchtower:
     image: containrrr/watchtower
@@ -18,7 +16,3 @@ services:
     env_file: ./watchtower.env
     labels:
       com.centurylinklabs.watchtower.enable: "false"
-
-networks:
-  infra_default:
-    external: true
