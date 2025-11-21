@@ -6,7 +6,7 @@ services:
     env_file: ./n8n-cron.env
     restart: always
     entrypoint: ["/bin/sh", "-c"]
-    command: ["./n8n-cron -brokers $$KAFKA_BROKERS -topic $$KAFKA_TOPIC -schedule '0 */10 * * * *'"]
+    command: ["./n8n-cron -schedule '0 */10 * * * *'"]
 
   watchtower:
     image: containrrr/watchtower
