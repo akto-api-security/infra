@@ -72,6 +72,7 @@ services:
   akto-api-security-writes-consumer:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
+    container_name: cyborg-consumer
     restart: always
     mem_limit: 4g
     depends_on:
