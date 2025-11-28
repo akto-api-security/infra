@@ -1,0 +1,18 @@
+version: '2.1'
+
+services:
+  n8n-cron:
+    image: public.ecr.aws/aktosecurity/agent-traffic-collector:langchain-shield-cron_latest
+    env_file: ./langchain-cron.env
+    restart: always
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/root/langchain-cron -schedule '0 */10 * * * *'"]
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
