@@ -122,4 +122,5 @@ services:
     volumes:
       - ../config-files/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
       - ../config-files/parsers.conf:/fluent-bit/etc/parsers.conf
+      - ../config-files/extract_account.lua:/fluent-bit/etc/extract_account.lua
 
