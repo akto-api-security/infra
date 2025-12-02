@@ -1,12 +1,12 @@
 version: '2.1'
 
 services:
-  n8n-cron:
-    image: public.ecr.aws/aktosecurity/agent-traffic-collector:copilot-shield-cron_test_latest
-    env_file: ./langchain-cron.env
+  copilot-cron:
+    image: public.ecr.aws/aktosecurity/agent-traffic-collector:copilot-shield-cron_test_staging
+    env_file: ./copilot-studio-cron.env
     restart: always
     entrypoint: ["/bin/sh", "-c"]
-    command: ["/root/langchain-cron -schedule '0 */10 * * * *'"]
+    command: ["./copilot-shield -schedule '0 */10 * * * *'"]
 
   watchtower:
     image: containrrr/watchtower
