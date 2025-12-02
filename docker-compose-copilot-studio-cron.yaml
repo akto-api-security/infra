@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   copilot-cron:
-    image: public.ecr.aws/aktosecurity/agent-traffic-collector:copilot-shield-cron_test_staging
+    image: public.ecr.aws/aktosecurity/agent-traffic-collector:copilot-shield-cron_latest
     env_file: ./copilot-studio-cron.env
     restart: always
     entrypoint: ["/bin/sh", "-c"]
