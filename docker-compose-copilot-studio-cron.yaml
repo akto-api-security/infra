@@ -1,0 +1,18 @@
+version: '2.1'
+
+services:
+  copilot-cron:
+    image: public.ecr.aws/aktosecurity/agent-traffic-collector:copilot-shield-cron_latest
+    env_file: ./copilot-studio-cron.env
+    restart: always
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["./copilot-shield -schedule '0 */10 * * * *'"]
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
