@@ -1,0 +1,22 @@
+version: '2.1'
+
+services:
+  agent-traffic-analyzer:
+    image: public.ecr.aws/aktosecurity/agent-traffic-analyzer:latest
+    container_name: agent-traffic-analyzer
+    env_file: ./docker-agent-traffic-analyzer.env
+    restart: always
+    ports:
+      - "8093:8093"
+    volumes:
+      - model-cache:/app/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  model-cache:
+
