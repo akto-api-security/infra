@@ -2,10 +2,11 @@ version: '2.1'
 
 services:
   agent-traffic-analyzer:
-    image: public.ecr.aws/aktosecurity/agent-traffic-analyzer:latest
+    image: aktosecurity/agent-traffic-analyzer:local
     container_name: agent-traffic-analyzer
     env_file: ./docker-agent-traffic-analyzer.env
     restart: always
+
     ports:
       - "8093:8093"
     volumes:
@@ -15,7 +16,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
 
 volumes:
   model-cache:
