@@ -1,6 +1,7 @@
 env/
 data-kafka-*/*
 data-zoo-*/*
+data-redis-*/*
 data/*
 .idea/
 mirroring-data
