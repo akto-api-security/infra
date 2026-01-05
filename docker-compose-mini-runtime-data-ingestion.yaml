@@ -84,7 +84,7 @@ services:
 
   redis:
     container_name: redis-threat-detection
-    image: redis:latest
+    image: public.ecr.aws/aktosecurity/redis:latest
     restart: always
     volumes:
       - ./data-redis-data:/data
