@@ -82,12 +82,22 @@ services:
     ports: 
       - "8000:8000"
 
+  redis:
+    container_name: redis-threat-detection
+    image: redis:latest
+    restart: always
+    volumes:
+      - ./data-redis-data:/data
+    ports:
+      - "6379:6379"
+
   threat-detection:
     image: aktosecurity/akto-threat-detection:latest
     env_file: ./docker-threat-detection.env
     restart: always
     depends_on:
       - kafka1
+      - redis
     logging:
       driver: "json-file"
       options:
