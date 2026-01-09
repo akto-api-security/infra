@@ -125,7 +125,7 @@ services:
       - ../config-files/extract_account.lua:/fluent-bit/etc/extract_account.lua
 
   watchtower:
-    image: containrrr/watchtower
+    image: public.ecr.aws/aktosecurity/containrrr-watchtower:latest
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
