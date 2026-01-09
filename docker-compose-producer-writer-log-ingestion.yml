@@ -124,3 +124,13 @@ services:
       - ../config-files/parsers.conf:/fluent-bit/etc/parsers.conf
       - ../config-files/extract_account.lua:/fluent-bit/etc/extract_account.lua
 
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    mem_limit: 200m
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
