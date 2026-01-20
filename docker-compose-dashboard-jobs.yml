@@ -24,17 +24,17 @@ services:
         max-size: "1g"
         max-file: "3"
 
-  # api-group-crons:
-  #   image: aktosecurity/akto-api-security-dashboard:a-temp-temp-api-group-crons
-  #   env_file: ./docker-dashboard-jobs.env
-  #   restart: always
-  #   ports: 
-  #     - "8080:8080"
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "1g"
-  #       max-file: "3"
+  job-crons:
+    image: aktosecurity/akto-api-security-dashboard:a-new-activate-traffic-jobs
+    env_file: ./docker-dashboard-jobs.env
+    restart: always
+    ports: 
+      - "8082:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1g"
+        max-file: "3"
 
   watchtower:
     image: containrrr/watchtower
