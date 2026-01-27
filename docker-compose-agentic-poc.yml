@@ -83,7 +83,7 @@ services:
 
   guardrails-service:
     image: aktosecurity/guardrails-service:a-master
-    env: ./docker-guardrails-service-kafka.env
+    env_file: ./docker-guardrails-service-kafka.env
     restart: always
     ports:
       - "127.0.0.1:9090:8080"
@@ -95,7 +95,7 @@ services:
 
   guardrails-service-http:
     image: aktosecurity/guardrails-service:a-master
-    env: ./docker-guardrails-service.env
+    env_file: ./docker-guardrails-service.env
     restart: always
     ports:
       - "127.0.0.1:9091:8080"
