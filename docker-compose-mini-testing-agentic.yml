@@ -1,0 +1,39 @@
+version: '3.8'
+services:
+  agent-testing:
+    container_name: agent-testing
+    image: public.ecr.aws/aktosecurity/akto-agentic-testing:latest
+    ports:
+      - "5500:5500"
+    env_file:
+      - ./docker-agentic-testing.env
+    restart: always
+
+  akto-api-security-testing:
+    image: public.ecr.aws/aktosecurity/akto-api-security-mini-testing:latest
+    environment:
+      RUNTIME_MODE: hybrid
+      DATABASE_ABSTRACTOR_SERVICE_TOKEN: <token>
+      PUPPETEER_REPLAY_SERVICE_URL: "http://akto-puppeteer-replay:3000"
+      MINI_TESTING_NAME: "akto-testing-module"
+      AGENT_BASE_URL: "http://agent-testing:5500"
+    restart: always
+
+  akto-api-security-puppeteer-replay:
+    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    restart: always
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: true
+      WATCHTOWER_POLL_INTERVAL: 1800
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
