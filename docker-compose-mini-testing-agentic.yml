@@ -11,16 +11,20 @@ services:
 
   akto-api-security-testing:
     image: public.ecr.aws/aktosecurity/akto-api-security-mini-testing:latest
+    container_name: akto-api-security-testing
     environment:
       RUNTIME_MODE: hybrid
       DATABASE_ABSTRACTOR_SERVICE_TOKEN: <token>
       PUPPETEER_REPLAY_SERVICE_URL: "http://akto-puppeteer-replay:3000"
       MINI_TESTING_NAME: "akto-testing-module"
       AGENT_BASE_URL: "http://agent-testing:5500"
+    ports:
+      - "8001:8001"
     restart: always
 
   akto-api-security-puppeteer-replay:
     image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
+    container_name: akto-puppeteer-replay
     ports:
       - "3000:3000"
     environment:
