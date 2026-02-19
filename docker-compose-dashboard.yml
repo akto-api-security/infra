@@ -73,9 +73,9 @@ services:
     labels:
       com.centurylinklabs.watchtower.enable: "false"
 
-  guardrails-service:
+  guardrails-service-playground:
     image: aktosecurity/guardrails-service:local
-    container_name: guardrails-service
+    container_name: guardrails-service-playground
     restart: always
     ports:
       - "8085:8085"
