@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploy Akto AWS API Gateway connector on a single EC2 instance. This stack
+  only deploys the connector and does not create Akto mini-runtime resources.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the connector EC2 instance should run.
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet where the connector EC2 instance should run.
+
+  KeyPair:
+    Type: String
+    Default: ''
+    Description: Optional EC2 key pair name. Leave empty to use SSM only.
+
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: AMI ID (SSM parameter default uses latest Amazon Linux 2023 x86_64).
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: EC2 instance type for connector host.
+
+  SshCidr:
+    Type: String
+    Default: ''
+    Description: Optional CIDR to allow SSH (port 22). Leave empty to disable SSH ingress.
+
+  AktoKafkaSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional Security Group ID of Akto mini-runtime instance. If provided,
+      this stack allows tcp/9092 ingress from connector SG to that SG.
+
+  AktoBytesInThreshold:
+    Type: String
+    Default: '100'
+
+  AktoTrafficBatchTimeSecs:
+    Type: String
+    Default: '10'
+
+  AktoTrafficBatchSize:
+    Type: String
+    Default: '100'
+
+  AktoKafkaBrokerMal:
+    Type: String
+    Description: Kafka broker endpoint in format <AktoNLB-DNS>:9092.
+
+  AwsAccessKeyId:
+    Type: String
+    Description: AWS access key ID for reading API Gateway CloudWatch logs.
+
+  AwsSecretAccessKey:
+    Type: String
+    NoEcho: true
+    Description: AWS secret access key for reading API Gateway CloudWatch logs.
+
+  AwsSessionToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Optional AWS session token for temporary credentials.
+
+  CloudwatchReadBatchSize:
+    Type: String
+    Default: '5'
+
+  LogGroupName:
+    Type: String
+    Description: API Gateway CloudWatch log group name to read from.
+
+  AwsRegion:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional AWS region where API Gateway log group exists. Leave empty to
+      use current stack region.
+
+  DatabaseAbstractorToken:
+    Type: String
+    NoEcho: true
+    Description: Database abstractor token from Akto Dashboard.
+
+  DiscoverOpenApiSpec:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  OpenApiDiscoveryIntervalMinutes:
+    Type: String
+    Default: '15'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPair, '']]
+  HasSshCidr: !Not [!Equals [!Ref SshCidr, '']]
+  HasAktoKafkaSecurityGroupId: !Not [!Equals [!Ref AktoKafkaSecurityGroupId, '']]
+  HasAwsRegion: !Not [!Equals [!Ref AwsRegion, '']]
+
+Resources:
+  ConnectorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ApiGatewayCloudwatchReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:FilterLogEvents
+                  - logs:GetLogEvents
+                Resource: !If
+                  - HasAwsRegion
+                  - - !Sub arn:${AWS::Partition}:logs:${AwsRegion}:${AWS::AccountId}:log-group:${LogGroupName}
+                    - !Sub arn:${AWS::Partition}:logs:${AwsRegion}:${AWS::AccountId}:log-group:${LogGroupName}:*
+                  - - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}
+                    - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:*
+
+  ConnectorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ConnectorInstanceRole
+
+  ConnectorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Akto API Gateway connector EC2
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  ConnectorSshIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasSshCidr
+    Properties:
+      GroupId: !Ref ConnectorSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref SshCidr
+
+  AktoKafkaIngressFromConnector:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasAktoKafkaSecurityGroupId
+    Properties:
+      GroupId: !Ref AktoKafkaSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 9092
+      ToPort: 9092
+      SourceSecurityGroupId: !Ref ConnectorSecurityGroup
+
+  ConnectorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref ConnectorInstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref ConnectorSecurityGroup
+      KeyName: !If [HasKeyPair, !Ref KeyPair, !Ref AWS::NoValue]
+      MetadataOptions:
+        HttpTokens: required
+      Tags:
+        - Key: Name
+          Value: akto-api-gateway-connector
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          exec > >(tee /var/log/akto-connector-userdata.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+          if command -v dnf >/dev/null 2>&1; then
+            dnf update -y
+            dnf install -y docker
+          else
+            yum update -y
+            yum install -y docker
+          fi
+
+          # Amazon Linux 2023 often ships curl-minimal; installing curl can conflict.
+          # Ensure a curl binary exists only when needed for compose fallback download.
+          if ! command -v curl >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y curl-minimal || dnf install -y curl || true
+            else
+              yum install -y curl || true
+            fi
+          fi
+
+          if ! command -v curl >/dev/null 2>&1; then
+            echo "curl binary is required but could not be installed"
+            exit 1
+          fi
+
+          systemctl enable docker
+          systemctl start docker
+
+          if ! docker compose version >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y docker-compose-plugin || true
+            else
+              yum install -y docker-compose-plugin || true
+            fi
+          fi
+
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            ARCH="$(uname -m)"
+            if [ "$ARCH" = "x86_64" ]; then
+              COMPOSE_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64"
+            elif [ "$ARCH" = "aarch64" ]; then
+              COMPOSE_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64"
+            else
+              echo "Unsupported architecture for docker compose: $ARCH"
+              exit 1
+            fi
+            curl -SL "$COMPOSE_URL" -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          fi
+
+          mkdir -p /opt/akto-connector
+
+          DEFAULT_AWS_REGION="${AWS::Region}"
+          CONFIGURED_AWS_REGION="${AwsRegion}"
+          EFFECTIVE_AWS_REGION="$DEFAULT_AWS_REGION"
+          if [ -n "$CONFIGURED_AWS_REGION" ]; then
+            EFFECTIVE_AWS_REGION="$CONFIGURED_AWS_REGION"
+          fi
+
+          cat > /opt/akto-connector/connector.env <<ENVVARS
+          AKTO_BYTES_IN_THRESHOLD=${AktoBytesInThreshold}
+          AKTO_TRAFFIC_BATCH_TIME_SECS=${AktoTrafficBatchTimeSecs}
+          AKTO_TRAFFIC_BATCH_SIZE=${AktoTrafficBatchSize}
+          AKTO_KAFKA_BROKER_MAL=${AktoKafkaBrokerMal}
+          CLOUDWATCH_READ_BATCH_SIZE=${CloudwatchReadBatchSize}
+          LOG_GROUP_NAME=${LogGroupName}
+          AWS_REGION=$EFFECTIVE_AWS_REGION
+          AWS_ACCESS_KEY_ID=${AwsAccessKeyId}
+          AWS_SECRET_ACCESS_KEY=${AwsSecretAccessKey}
+          AWS_SESSION_TOKEN=${AwsSessionToken}
+          DATABASE_ABSTRACTOR_TOKEN=${DatabaseAbstractorToken}
+          DISCOVER_OPENAPI_SPEC=${DiscoverOpenApiSpec}
+          OPENAPI_DISCOVERY_INTERVAL_MINUTES=${OpenApiDiscoveryIntervalMinutes}
+          ENVVARS
+
+          cat > /opt/akto-connector/docker-compose.yml <<COMPOSE
+          version: "3.9"
+
+          services:
+            api-gateway-logging:
+              image: aktosecurity/mirror-api-logging:api-gateway-logging-openapi
+              pull_policy: always
+              container_name: api-gateway-logging
+              restart: unless-stopped
+              env_file:
+                - ./connector.env
+
+            watchtower:
+              image: containrrr/watchtower
+              restart: always
+              volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+              env_file: ./watchtower.env
+              labels:
+                com.centurylinklabs.watchtower.enable: "false"
+          COMPOSE
+
+          cat > /opt/akto-connector/watchtower.env <<WATCHTOWER
+          WATCHTOWER_CLEANUP=true
+          WATCHTOWER_POLL_INTERVAL=1800
+          WATCHTOWER
+
+          cd /opt/akto-connector
+          docker compose up -d
+
+Outputs:
+  ConnectorInstanceId:
+    Description: Connector EC2 instance ID
+    Value: !Ref ConnectorInstance
+
+  ConnectorPrivateIp:
+    Description: Connector EC2 private IP
+    Value: !GetAtt ConnectorInstance.PrivateIp
+
+  ConnectorSecurityGroupId:
+    Description: Security group ID attached to connector EC2
+    Value: !Ref ConnectorSecurityGroup
