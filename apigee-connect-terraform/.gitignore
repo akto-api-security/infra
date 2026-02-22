@@ -1,0 +1,21 @@
+# Terraform working dirs and caches
+.terraform/
+**/.terraform/
+
+# Terraform state and backups
+*.tfstate
+*.tfstate.*
+
+# Local variable files (often contain secrets/endpoints)
+*.tfvars
+*.tfvars.json
+
+# Provider lock file (ignore in module repos; keep if desired in root env repos)
+.terraform.lock.hcl
+
+# Crash and override files
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
