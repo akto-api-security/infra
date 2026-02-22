@@ -107,11 +107,15 @@ var payload = {
     batchData: [trafficData]
 };
 
-var ingestionUrl = "http://<data-ingestion-service-ip>:9091/api/ingestData";
+var ingestionUrl = "${data_ingestion_service_url}";
 var requestBody = JSON.stringify(payload);
 var headers = {
     "Content-Type": "application/json"
 };
 
 var req = new Request(ingestionUrl, 'POST', headers, requestBody);
-var exchange = httpClient.send(req);
+httpClient.send(req, function(response, error) {
+  if (error) {
+    print("Akto ingestion error: " + error);
+  }
+});
