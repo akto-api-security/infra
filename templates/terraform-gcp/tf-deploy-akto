@@ -63,6 +63,15 @@ command_present() {
   type "$1" >/dev/null 2>&1
 }
 
+# Some startup environments do not export HOME; guard for set -u.
+if [ -z "${HOME:-}" ]; then
+  RESOLVED_HOME="$(getent passwd "$(id -u)" | cut -d: -f6 2>/dev/null || true)"
+  if [ -z "$RESOLVED_HOME" ]; then
+    RESOLVED_HOME="/root"
+  fi
+  export HOME="$RESOLVED_HOME"
+fi
+
 install_unzip() {
   if command_present unzip; then
     log_step '`unzip` found!'
@@ -135,7 +144,7 @@ akto_trial_running() {
 INSTALL_DIRECTORY="$HOME/akto"
 DOCKER_CONTEXT="$INSTALL_DIRECTORY/infra"
 
-cd ~
+cd "$HOME"
 
 if [ ! -d "$DOCKER_CONTEXT" ]; then
   if [ -d "$INSTALL_DIRECTORY" ]; then
@@ -144,7 +153,7 @@ if [ ! -d "$DOCKER_CONTEXT" ]; then
   fi
 
   log_step 'setting up install location...' "$INSTALL_DIRECTORY"
-  mkdir akto && cd akto
+  mkdir -p "$INSTALL_DIRECTORY" && cd "$INSTALL_DIRECTORY"
 
   install_unzip
   log_step 'downloading...'
