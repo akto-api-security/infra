@@ -32,16 +32,33 @@ locals {
     #!/usr/bin/env bash
     set -euxo pipefail
 
+    if [ -z "$${HOME:-}" ]; then
+      export HOME="/root"
+    fi
+
     export DATABASE_ABSTRACTOR_SERVICE_URL='${var.database_abstractor_url}'
     export DATABASE_ABSTRACTOR_SERVICE_TOKEN='${var.database_abstractor_token}'
     export AKTO_KAFKA_IP='${google_compute_address.runtime_internal_ip.address}'
 
     apt-get update -y
-    DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io curl git python3 python3-setuptools
+    DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io curl git python3 python3-setuptools unzip
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin; then
+      DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose
+    fi
+
+    if ! command -v docker-compose >/dev/null 2>&1; then
+      cat >/usr/local/bin/docker-compose <<'EOF'
+#!/usr/bin/env bash
+docker compose "$@"
+EOF
+      chmod +x /usr/local/bin/docker-compose
+    fi
     systemctl enable docker
     systemctl start docker
 
-    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/gcp_mini_runtime_terraform/tf-deploy-akto' -o /tmp/tf-deploy-akto
+    cat >/tmp/tf-deploy-akto <<'AKTO_TF_DEPLOY'
+${file("${path.module}/tf-deploy-akto")}
+AKTO_TF_DEPLOY
     chmod 700 /tmp/tf-deploy-akto
     bash /tmp/tf-deploy-akto <<< "test"
 
@@ -67,9 +84,8 @@ locals {
       sed -i "s/DATABASE_ABSTRACTOR_SERVICE_TOKEN=.*/DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN/" "$HOME/akto/infra/docker-threat-detection.env"
     fi
 
-    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start' -o /tmp/cf-deploy-akto-start
-    chmod 700 /tmp/cf-deploy-akto-start
-    bash /tmp/cf-deploy-akto-start <<< "test"
+    cd "$HOME/akto/infra"
+    docker-compose -f docker-compose-mini-runtime.yml up -d
   EOT
 }
 
@@ -134,15 +150,14 @@ resource "google_compute_firewall" "runtime_iap_ssh" {
 resource "google_compute_health_check" "runtime" {
   project            = local.project_id
   name               = "${local.runtime_prefix}-hc"
-  check_interval_sec = 10
-  timeout_sec        = 6
+  check_interval_sec = 15
+  timeout_sec        = 10
 
   healthy_threshold   = 2
-  unhealthy_threshold = 2
+  unhealthy_threshold = 4
 
-  http_health_check {
-    port         = 8000
-    request_path = "/metrics"
+  tcp_health_check {
+    port = 8000
   }
 }
 
@@ -200,7 +215,7 @@ resource "google_compute_region_instance_group_manager" "runtime" {
 
   auto_healing_policies {
     health_check      = google_compute_health_check.runtime.id
-    initial_delay_sec = 300
+    initial_delay_sec = 900
   }
 }
 
