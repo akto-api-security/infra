@@ -92,3 +92,12 @@ services:
       options:
         max-size: "200m"
         max-file: "2"
+
+  agent-testing:
+    container_name: agent-testing
+    image: public.ecr.aws/aktosecurity/akto-agentic-testing:latest
+    ports:
+      - "5500:5500"
+    env_file:
+      - ./docker-agentic-testing.env
+    restart: always
