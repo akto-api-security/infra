@@ -91,6 +91,24 @@ services:
       - "3000:3000"
     restart: always
 
+  agent-testing:
+    container_name: agent-testing
+    image: public.ecr.aws/aktosecurity/akto-agentic-testing:latest
+    ports:
+      - "5500:5500"
+    env_file:
+      - ./docker-agentic-testing-dashboard.env
+    restart: always
+
+  mcp-server:
+    container_name: mcp-server
+    image: public.ecr.aws/aktosecurity/akto-agentic-testing:mcp_latest
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./docker-mcp-server.env
+    restart: always
+
   watchtower:
     image: containrrr/watchtower
     restart: always
