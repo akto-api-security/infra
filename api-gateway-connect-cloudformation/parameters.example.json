@@ -12,14 +12,6 @@
     "ParameterValue": "akto-m-xxxxxxxx.elb.ap-south-1.amazonaws.com:9092"
   },
   {
-    "ParameterKey": "AwsAccessKeyId",
-    "ParameterValue": "AKIA..."
-  },
-  {
-    "ParameterKey": "AwsSecretAccessKey",
-    "ParameterValue": ""
-  },
-  {
     "ParameterKey": "LogGroupName",
     "ParameterValue": "/aws/apigateway/your-api-stage"
   },

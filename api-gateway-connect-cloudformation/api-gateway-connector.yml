@@ -26,15 +26,6 @@ Parameters:
     Type: String
     Description: Kafka broker endpoint in format <AktoNLB-DNS>:9092.
 
-  AwsAccessKeyId:
-    Type: String
-    Description: AWS access key ID for reading API Gateway CloudWatch logs.
-
-  AwsSecretAccessKey:
-    Type: String
-    NoEcho: true
-    Description: AWS secret access key for reading API Gateway CloudWatch logs.
-
   LogGroupName:
     Type: String
     Description: API Gateway CloudWatch log group name to read from.
@@ -74,6 +65,14 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:*
+              - Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource:
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/*
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis/*
 
   ConnectorInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -103,6 +102,7 @@ Resources:
       KeyName: !If [HasKeyPair, !Ref KeyPair, !Ref AWS::NoValue]
       MetadataOptions:
         HttpTokens: required
+        HttpPutResponseHopLimit: 2
       Tags:
         - Key: Name
           Value: akto-api-gateway-connector
@@ -129,8 +129,6 @@ Resources:
           CLOUDWATCH_READ_BATCH_SIZE=5
           LOG_GROUP_NAME=${LogGroupName}
           AWS_REGION=${AWS::Region}
-          AWS_ACCESS_KEY_ID=${AwsAccessKeyId}
-          AWS_SECRET_ACCESS_KEY=${AwsSecretAccessKey}
           DATABASE_ABSTRACTOR_TOKEN=${DatabaseAbstractorToken}
           DISCOVER_OPENAPI_SPEC=true
           OPENAPI_DISCOVERY_INTERVAL_MINUTES=15
