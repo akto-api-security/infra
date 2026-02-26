@@ -164,7 +164,7 @@ Resources:
 
               cd /opt/akto-connector
               docker compose up -d
-            - LogGroupNameStr: !Ref LogGroupName
+            - LogGroupNameStr: !Join [",", !Ref LogGroupName]
 
 Outputs:
   ConnectorInstanceId:
