@@ -2,7 +2,7 @@ version: '3'
 
 services:
   flask_server:
-    image: ark2307/akto-ssrf-service:latest
+    image: public.ecr.aws/aktosecurity/akto-testing-utility:latest
     env_file: ./docker.env
     ports:
       - "5200:5100"
