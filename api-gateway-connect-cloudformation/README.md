@@ -28,7 +28,6 @@ You only need these in `parameters.json`:
 - `SshCidr` (default empty, no SSH ingress)
 - `AktoKafkaSecurityGroupId` (default empty, no auto 9092 rule)
 - `AwsRegion` (default empty, uses stack region)
-- `AwsSessionToken` (default empty, set only when using temporary credentials)
 - Connector tuning params (all defaulted)
 
 ## Fixed values in template
@@ -55,3 +54,4 @@ cp /Users/tangobee/infra/api-gateway-connect-cloudformation/parameters.example.j
 
 - If you set `AktoKafkaSecurityGroupId`, the template automatically opens tcp/9092 from connector SG to mini-runtime SG.
 - SSM access is enabled via IAM role (`AmazonSSMManagedInstanceCore`).
+- For this setup, AWS Credentials are not required as the required IAM policies and roles are created by the tmeplate and attached to the Instance.
