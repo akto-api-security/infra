@@ -140,7 +140,7 @@ Resources:
 
               services:
                 api-gateway-logging:
-                  image: aktosecurity/mirror-api-logging:api-gateway-logging-openapi
+                  image: aktosecurity/mirror-api-logging:api-gateway-logging-multi-logging
                   pull_policy: always
                   container_name: api-gateway-logging
                   restart: unless-stopped
