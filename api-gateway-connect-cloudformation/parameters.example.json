@@ -13,7 +13,7 @@
   },
   {
     "ParameterKey": "LogGroupName",
-    "ParameterValue": "/aws/apigateway/your-api-stage, /aws/apigateway/your-api-stage-2"
+    "ParameterValue": "/aws/apigateway/your-api-stage,/aws/apigateway/your-api-stage-2"
   },
   {
     "ParameterKey": "DatabaseAbstractorToken",
