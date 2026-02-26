@@ -131,9 +131,8 @@ Resources:
               LOG_GROUP_NAME=${LogGroupNameStr}
               AWS_REGION=${AWS::Region}
               DATABASE_ABSTRACTOR_TOKEN=${DatabaseAbstractorToken}
-              DISCOVER_OPENAPI_SPEC=false
+              DISCOVER_OPENAPI_SPEC=true
               OPENAPI_DISCOVERY_INTERVAL_MINUTES=15
-              AKTO_LOG_LEVEL=DEBUG
               ENVVARS
 
               cat > /opt/akto-connector/docker-compose.yml <<COMPOSE
