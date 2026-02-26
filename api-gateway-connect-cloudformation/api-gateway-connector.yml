@@ -26,18 +26,9 @@ Parameters:
     Type: String
     Description: Kafka broker endpoint in format <AktoNLB-DNS>:9092.
 
-  AwsAccessKeyId:
-    Type: String
-    Description: AWS access key ID for reading API Gateway CloudWatch logs.
-
-  AwsSecretAccessKey:
-    Type: String
-    NoEcho: true
-    Description: AWS secret access key for reading API Gateway CloudWatch logs.
-
   LogGroupName:
-    Type: String
-    Description: API Gateway CloudWatch log group name to read from.
+    Type: CommaDelimitedList
+    Description: Comma-separated list of API Gateway CloudWatch log group names to read from.
 
   DatabaseAbstractorToken:
     Type: String
@@ -72,8 +63,15 @@ Resources:
                   - logs:FilterLogEvents
                   - logs:GetLogEvents
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+              - Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource:
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/*
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis
+                  - !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis/*
 
   ConnectorInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -103,68 +101,70 @@ Resources:
       KeyName: !If [HasKeyPair, !Ref KeyPair, !Ref AWS::NoValue]
       MetadataOptions:
         HttpTokens: required
+        HttpPutResponseHopLimit: 2
       Tags:
         - Key: Name
           Value: akto-api-gateway-connector
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          set -e
-          yum update -y
-          yum install -y docker
-          systemctl enable docker
-          systemctl start docker
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              set -e
+              yum update -y
+              yum install -y docker
+              systemctl enable docker
+              systemctl start docker
 
-          mkdir -p /usr/local/lib/docker/cli-plugins
-          curl -SL https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
-          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -SL https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-          mkdir -p /opt/akto-connector
+              mkdir -p /opt/akto-connector
 
-          cat > /opt/akto-connector/connector.env <<ENVVARS
-          AKTO_BYTES_IN_THRESHOLD=100
-          AKTO_TRAFFIC_BATCH_TIME_SECS=10
-          AKTO_TRAFFIC_BATCH_SIZE=100
-          AKTO_KAFKA_BROKER_MAL=${AktoKafkaBrokerMal}
-          CLOUDWATCH_READ_BATCH_SIZE=5
-          LOG_GROUP_NAME=${LogGroupName}
-          AWS_REGION=${AWS::Region}
-          AWS_ACCESS_KEY_ID=${AwsAccessKeyId}
-          AWS_SECRET_ACCESS_KEY=${AwsSecretAccessKey}
-          DATABASE_ABSTRACTOR_TOKEN=${DatabaseAbstractorToken}
-          DISCOVER_OPENAPI_SPEC=true
-          OPENAPI_DISCOVERY_INTERVAL_MINUTES=15
-          ENVVARS
+              cat > /opt/akto-connector/connector.env <<ENVVARS
+              AKTO_BYTES_IN_THRESHOLD=100
+              AKTO_TRAFFIC_BATCH_TIME_SECS=10
+              AKTO_TRAFFIC_BATCH_SIZE=100
+              AKTO_KAFKA_BROKER_MAL=${AktoKafkaBrokerMal}
+              CLOUDWATCH_READ_BATCH_SIZE=5
+              LOG_GROUP_NAME=${LogGroupNameStr}
+              AWS_REGION=${AWS::Region}
+              DATABASE_ABSTRACTOR_TOKEN=${DatabaseAbstractorToken}
+              DISCOVER_OPENAPI_SPEC=true
+              OPENAPI_DISCOVERY_INTERVAL_MINUTES=15
+              ENVVARS
 
-          cat > /opt/akto-connector/docker-compose.yml <<COMPOSE
-          version: "3.9"
+              cat > /opt/akto-connector/docker-compose.yml <<COMPOSE
+              version: "3.9"
 
-          services:
-            api-gateway-logging:
-              image: aktosecurity/mirror-api-logging:api-gateway-logging-openapi
-              pull_policy: always
-              container_name: api-gateway-logging
-              restart: unless-stopped
-              env_file:
-                - ./connector.env
+              services:
+                api-gateway-logging:
+                  image: aktosecurity/mirror-api-logging:api-gateway-logging-multi-logging
+                  pull_policy: always
+                  container_name: api-gateway-logging
+                  restart: unless-stopped
+                  env_file:
+                    - ./connector.env
 
-            watchtower:
-              image: containrrr/watchtower
-              restart: always
-              volumes:
-                - /var/run/docker.sock:/var/run/docker.sock
-              env_file: ./watchtower.env
-              labels:
-                com.centurylinklabs.watchtower.enable: "false"
-          COMPOSE
+                watchtower:
+                  image: containrrr/watchtower
+                  restart: always
+                  volumes:
+                    - /var/run/docker.sock:/var/run/docker.sock
+                  env_file: ./watchtower.env
+                  labels:
+                    com.centurylinklabs.watchtower.enable: "false"
+              COMPOSE
 
-          cat > /opt/akto-connector/watchtower.env <<WATCHTOWER
-          WATCHTOWER_CLEANUP=true
-          WATCHTOWER_POLL_INTERVAL=1800
-          WATCHTOWER
+              cat > /opt/akto-connector/watchtower.env <<WATCHTOWER
+              WATCHTOWER_CLEANUP=true
+              WATCHTOWER_POLL_INTERVAL=1800
+              WATCHTOWER
 
-          cd /opt/akto-connector
-          docker compose up -d
+              cd /opt/akto-connector
+              docker compose up -d
+            - LogGroupNameStr: !Join [",", !Ref LogGroupName]
 
 Outputs:
   ConnectorInstanceId:
