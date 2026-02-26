@@ -17,9 +17,7 @@ You only need these in `parameters.json`:
 - `VpcId`
 - `SubnetId`
 - `AktoKafkaBrokerMal`
-- `AwsAccessKeyId`
-- `AwsSecretAccessKey`
-- `LogGroupName`
+- `LogGroupName` - For more than one log groups, add names separated by comma (,)
 - `DatabaseAbstractorToken`
 
 ## Optional parameters (defaults exist)
@@ -35,7 +33,7 @@ You only need these in `parameters.json`:
 
 ## Fixed values in template
 
-- Connector image: `aktosecurity/mirror-api-logging:api-gateway-logging-openapi`
+- Connector image: `aktosecurity/mirror-api-logging:api-gateway-logging-multi-logging`
 - Watchtower poll interval: `1800` seconds
 
 ## Deploy
