@@ -1,11 +1,4 @@
 (function () {
-  var SENSITIVE_HEADERS = {
-    "authorization": true,
-    "cookie": true,
-    "proxy-authorization": true,
-    "set-cookie": true
-  };
-
   function safeString(value) {
     if (value === null || value === undefined) {
       return "";
@@ -63,10 +56,6 @@
 
     for (var i = 0; i < headerNames.length; i++) {
       var headerName = headerNames[i];
-      var headerNameLower = headerName.toLowerCase();
-      if (SENSITIVE_HEADERS[headerNameLower]) {
-        continue;
-      }
 
       var headerValue = getHeaderValue(prefix, headerName);
       if (!headerValue) {
