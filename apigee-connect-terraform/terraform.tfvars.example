@@ -1,3 +1,8 @@
-project_id                 = "your-gcp-project-id"
-apigee_environment         = "prod"
-data_ingestion_service_url = "https://your-ingestion-host:9091/api/ingestData"
+# GCP Project ID
+gcp_project_id = "your-gcp-project-id"
+
+# Apigee environment
+apigee_environment = "prod"
+
+# TCP syslog endpoint (data-ingestion-service)
+data_ingestion_service_url = "your-syslog-ip:5140"

@@ -73,6 +73,7 @@ services:
     restart: always
     ports:
       - "9091:8080"
+      - "5140:5140/tcp"
     depends_on:
       - kafka1
 

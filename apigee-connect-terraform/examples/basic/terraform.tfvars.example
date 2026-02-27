@@ -1,3 +1,0 @@
-project_id                 = "your-gcp-project-id"
-apigee_environment         = "prod"
-data_ingestion_service_url = "https://your-ingestion-host:9091/api/ingestData"

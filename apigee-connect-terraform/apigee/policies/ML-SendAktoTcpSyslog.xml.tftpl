@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  TCP syslog; Apigee manages the connection pool.
+  continueOnError="true" ensures logging failure never blocks API traffic.
+-->
+<MessageLogging name="ML-SendAktoTcpSyslog" continueOnError="true" enabled="true">
+  <DisplayName>ML-SendAktoTcpSyslog</DisplayName>
+  <Syslog>
+    <Message>{akto.log.payload}</Message>
+    <Host>${syslog_host}</Host>
+    <Port>${syslog_port}</Port>
+    <Protocol>TCP</Protocol>
+    <FormatMessage>false</FormatMessage>
+  </Syslog>
+</MessageLogging>

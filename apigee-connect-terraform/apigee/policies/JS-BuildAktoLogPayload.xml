@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript name="JS-BuildAktoLogPayload" continueOnError="true" enabled="true" timeLimit="1000">
+  <DisplayName>JS-BuildAktoLogPayload</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://build-akto-log-payload.js</ResourceURL>
+</Javascript>

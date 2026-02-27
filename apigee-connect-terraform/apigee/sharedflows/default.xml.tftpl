@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SharedFlow name="default">
+  <!-- Build the full payload. -->
+  <Step>
+    <Name>JS-BuildAktoLogPayload</Name>
+  </Step>
+
+  <!-- Send via TCP Syslog after response processing. -->
+  <Step>
+    <Name>${tcp_policy_name}</Name>
+  </Step>
+</SharedFlow>
