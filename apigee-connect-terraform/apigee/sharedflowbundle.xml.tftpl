@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SharedFlowBundle revision="1">
+  <DisplayName>${shared_flow_name}</DisplayName>
+  <Description>Asynchronous TCP message logging shared flow for Apigee X.</Description>
+  <Policies>
+    <Policy>JS-BuildAktoLogPayload</Policy>
+    <Policy>${tcp_policy_name}</Policy>
+  </Policies>
+  <Flow>
+    <Name>default</Name>
+  </Flow>
+  <CreatedAt>1</CreatedAt>
+  <CreatedBy>terraform</CreatedBy>
+  <LastModifiedAt>1</LastModifiedAt>
+  <LastModifiedBy>terraform</LastModifiedBy>
+</SharedFlowBundle>

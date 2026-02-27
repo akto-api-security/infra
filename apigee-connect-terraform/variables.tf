@@ -1,55 +1,57 @@
-variable "project_id" {
-  description = "Google Cloud project ID hosting Apigee (used as Apigee org_id in this module)."
+variable "gcp_project_id" {
+  description = "GCP project ID hosting Apigee X (also used as Apigee org_id)."
   type        = string
-}
-
-variable "apigee_environment" {
-  description = "Apigee environment name where the shared flow is deployed and attached."
-  type        = string
-}
-
-variable "proxy_name" {
-  description = "Name of the Apigee shared flow used for Akto traffic capture."
-  type        = string
-  default     = "akto-traffic-collector"
-}
-
-variable "base_path" {
-  description = "Deprecated for global shared-flow mode. Retained for backward compatibility and ignored."
-  type        = string
-  default     = "/akto"
 
   validation {
-    condition     = startswith(var.base_path, "/")
-    error_message = "base_path must start with '/'."
+    condition     = trimspace(var.gcp_project_id) != ""
+    error_message = "gcp_project_id must not be empty."
   }
 }
 
+variable "apigee_environment" {
+  description = "Apigee environment name where the shared flow is deployed."
+  type        = string
+
+  validation {
+    condition     = trimspace(var.apigee_environment) != ""
+    error_message = "apigee_environment must not be empty."
+  }
+}
+
+variable "data_ingestion_service_url" {
+  description = "TCP syslog destination in host:port format."
+  type        = string
+
+  validation {
+    condition = (
+      length(split(":", var.data_ingestion_service_url)) == 2 &&
+      trimspace(split(":", var.data_ingestion_service_url)[0]) != "" &&
+      can(tonumber(split(":", var.data_ingestion_service_url)[1])) &&
+      tonumber(split(":", var.data_ingestion_service_url)[1]) >= 1 &&
+      tonumber(split(":", var.data_ingestion_service_url)[1]) <= 65535
+    )
+    error_message = "data_ingestion_service_url must be in host:port format with a valid port (1-65535)."
+  }
+}
+
+variable "shared_flow_name" {
+  description = "Name of the Apigee shared flow that sends asynchronous TCP logs."
+  type        = string
+  default     = "akto-tcp-async-logger"
+}
+
 variable "flow_hook_point" {
-  description = "Environment flow hook point to attach the Akto shared flow."
+  description = "Flow hook point used for environment-wide attachment; PostProxyFlowHook is recommended for post-response logging."
   type        = string
   default     = "PostProxyFlowHook"
 
   validation {
     condition = contains([
       "PreProxyFlowHook",
-      "PostProxyFlowHook",
       "PreTargetFlowHook",
-      "PostTargetFlowHook"
+      "PostTargetFlowHook",
+      "PostProxyFlowHook"
     ], var.flow_hook_point)
-    error_message = "flow_hook_point must be one of PreProxyFlowHook, PostProxyFlowHook, PreTargetFlowHook, PostTargetFlowHook."
-  }
-}
-
-variable "data_ingestion_service_url" {
-  description = "Akto data ingestion service URL from Step 1 output."
-  type        = string
-
-  validation {
-    condition = (
-      startswith(var.data_ingestion_service_url, "https://") ||
-      startswith(var.data_ingestion_service_url, "http://")
-    )
-    error_message = "data_ingestion_service_url must start with http:// or https://."
+    error_message = "flow_hook_point must be one of PreProxyFlowHook, PreTargetFlowHook, PostTargetFlowHook, PostProxyFlowHook."
   }
 }
