@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   kafka1:
-    image: confluentinc/cp-kafka:8.2.0-1-ubi9
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:8.2.0-1-ubi9
     restart: always
     hostname: kafka1
     user: "0"
