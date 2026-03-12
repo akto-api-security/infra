@@ -70,3 +70,12 @@ services:
       - docker-compose.webhook.env
     depends_on:
       - webhook-site-redis
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    labels:
+      com.centurylinklabs.watchtower.enable: "false" 
