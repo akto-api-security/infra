@@ -11,7 +11,7 @@ services:
     container_name: webhook-site-nginx
     restart: always
     ports:
-      - "5200:80"
+      - "80:80"
     volumes:
       # Minimal: only POST /token, GET /token/{uuid}/requests, and /{uuid} capture (no UI)
       - ./nginx/nginx-minimal.conf:/etc/nginx/conf.d/default.conf:ro
