@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Cross-account IAM role for Akto to read CloudWatch Logs and inspect API Gateway configurations/specs.
+
+Parameters:
+  AktoAccountId:
+    Type: String
+    Description: AWS Account ID for Akto (12 digits)
+    AllowedPattern: '^\d{12}$'
+
+  AktoExternalId:
+    Type: String
+    Description: Optional external ID provided by Akto for secure cross-account assume role
+    Default: ''
+
+  RoleName:
+    Type: String
+    Description: Name of the IAM role to create
+    Default: AktoReadOnlyIntegrationRole
+
+Conditions:
+  HasExternalId: !Not [!Equals [!Ref AktoExternalId, ""]]
+
+Resources:
+  AktoIntegrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Role assumed by Akto to read CloudWatch Logs and inspect API Gateway APIs/specs
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAktoAssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AktoAccountId}:root
+            Action: sts:AssumeRole
+            Condition: !If
+              - HasExternalId
+              - StringEquals:
+                  sts:ExternalId: !Ref AktoExternalId
+              - !Ref AWS::NoValue
+
+      Policies:
+        - PolicyName: AktoCloudWatchLogsAndApiGatewayReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CloudWatchLogsRead
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                  - logs:StartQuery
+                  - logs:StopQuery
+                  - logs:GetQueryResults
+                  - logs:DescribeQueries
+                  - logs:DescribeExportTasks
+                Resource: "*"
+
+              - Sid: ApiGatewayRead
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource: !Sub arn:${AWS::Partition}:apigateway:*::/*
+
+Outputs:
+  AktoRoleArn:
+    Description: ARN of the role to provide to Akto
+    Value: !GetAtt AktoIntegrationRole.Arn
+
+  AktoRoleName:
+    Description: Name of the created IAM role
+    Value: !Ref AktoIntegrationRole
