@@ -18,10 +18,28 @@ Parameters:
     Description: Name of the IAM role to create
     Default: AktoReadOnlyIntegrationRole
 
+  DatabaseAbstractorToken:
+    Type: String
+    NoEcho: true
+    Description: Akto database abstractor token used to authenticate the registration call.
+
 Conditions:
   HasExternalId: !Not [!Equals [!Ref AktoExternalId, ""]]
 
 Resources:
+  AktoRegistrationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
   AktoIntegrationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -65,6 +83,84 @@ Resources:
                 Action:
                   - apigateway:GET
                 Resource: !Sub arn:${AWS::Partition}:apigateway:*::/*
+
+  AktoRegistrationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt AktoRegistrationLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, urllib.request, urllib.error
+
+          def send_response(event, context, status, data):
+              try:
+                  response_url = event['ResponseURL']
+                  physical_id = event.get('PhysicalResourceId')
+                  if not physical_id:
+                      physical_id = context.aws_request_id
+
+                  response_body = {
+                      'Status': status,
+                      'PhysicalResourceId': physical_id,
+                      'StackId': event['StackId'],
+                      'RequestId': event['RequestId'],
+                      'LogicalResourceId': event['LogicalResourceId'],
+                      'Data': data,
+                  }
+
+                  print(f'Sending response: {json.dumps(response_body)}')
+                  req = urllib.request.Request(
+                      response_url,
+                      data=json.dumps(response_body).encode('utf-8'),
+                      headers={'Content-Type': 'application/json'},
+                      method='PUT',
+                  )
+                  urllib.request.urlopen(req, timeout=15)
+                  print('Response sent successfully')
+              except Exception as e:
+                  print(f'Error sending response: {e}')
+
+          def handler(event, context):
+              print(f'Handler invoked with event: {event}')
+              try:
+                  if event['RequestType'] != 'Create':
+                      print('Non-Create request, returning SUCCESS')
+                      send_response(event, context, 'SUCCESS', {})
+                      return
+
+                  account_id = event['ResourceProperties']['AwsAccountId']
+                  token      = event['ResourceProperties']['DatabaseAbstractorToken']
+
+                  print(f'Registering account {account_id}')
+                  payload = json.dumps({'awsAccountId': account_id}).encode('utf-8')
+                  req = urllib.request.Request(
+                      'https://ultron.akto.io/api/insertAwsAccountId',
+                      data=payload,
+                      headers={
+                          'Content-Type': 'application/json',
+                          'Authorization': token,
+                      },
+                      method='POST',
+                  )
+                  urllib.request.urlopen(req, timeout=10)
+                  print('Account registration successful')
+                  send_response(event, context, 'SUCCESS', {})
+              except Exception as e:
+                  print(f'Exception caught: {e}')
+                  send_response(event, context, 'FAILED', {'Error': str(e)})
+
+  AktoAccountRegistration:
+    Type: Custom::AktoAccountRegistration
+    DependsOn:
+      - AktoIntegrationRole
+      - AktoRegistrationLambda
+    Properties:
+      ServiceToken: !GetAtt AktoRegistrationLambda.Arn
+      AwsAccountId: !Ref AWS::AccountId
+      DatabaseAbstractorToken: !Ref DatabaseAbstractorToken
 
 Outputs:
   AktoRoleArn:
