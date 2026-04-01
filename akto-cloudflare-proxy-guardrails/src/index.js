@@ -37,7 +37,6 @@ export default {
 				requestForLog = request.clone();
 			}
 
-			// const response = await fetch(requestForFetch);
 			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
@@ -111,9 +110,10 @@ export default {
 		const resHook = await validateGuardrails('response', afterEntry, env);
 
 		if (resHook.type === 'block') {
-			responseForClient = guardrailsBlockedResponse(resHook.gr);
-			responseForLogTraffic = responseForClient.clone();
-		} else if (resHook.type === 'modified') {
+			return guardrailsBlockedResponse(resHook.gr);
+		}
+
+		if (resHook.type === 'modified') {
 			responseForClient = modifiedUpstreamBodyResponse(response, resHook.gr.ModifiedPayload);
 			responseForLogTraffic = responseForClient.clone();
 		} else if (resLogStream != null) {
@@ -166,13 +166,19 @@ async function logTraffic(request, response, env, opts = {}) {
 		console.log('📋 Log entry:', JSON.stringify(logEntry, null, 2));
 		console.log('📤 Sending log entry to webhook...');
 
-		const aktoReq = new Request('https://<DATA_INGESTION_SERVICE>/api/ingestData', {
+		const ingestUrl = dataIngestionIngestUrl(env);
+		const apiKey = dataIngestionApiKey(env);
+		if (!ingestUrl) {
+			console.warn('⚠️ AKTO_DATA_INGESTION_URL or AKTO_DATA_INGESTION_TOKEN missing; skipping ingest');
+			return;
+		}
+
+		const aktoReq = new Request(ingestUrl, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json', 'x-api-key': 'YOUR_AKTO_API_KEY' },
+			headers: { 'content-type': 'application/json', 'Authorization': apiKey },
 			body: JSON.stringify({ batchData: [logEntry] }),
 		});
 
-		// await env.<CONTAINER_BINDING_VARIABLE_NAME>.fetch(aktoReq);
 		const aktoResp = await fetch(aktoReq);
 
 		if (aktoResp.status == 200) {
@@ -203,11 +209,11 @@ async function readBodyAsText(obj, maxSize = 64 * 1024) {
 function shouldApplyGuardrails(request, env) {
 	const enabled = env?.APPLY_AKTO_GUARDRAILS === true || (typeof env?.APPLY_AKTO_GUARDRAILS === 'string' && (env.APPLY_AKTO_GUARDRAILS === 'true' || env.APPLY_AKTO_GUARDRAILS === '1'));
 	if (!enabled) return false;
-	if (request.method === 'DELETE') return false;
+	if (request.method === 'DELETE' || request.method === 'GET') return false;
 
 	const raw = env?.AKTO_ENDPOINTS_TO_GUARD;
 	if (typeof raw !== 'string' || raw.trim() === '') {
-		return false;
+		return true;
 	}
 	const requestPath = new URL(request.url).pathname.toLowerCase();
 	const guardedNeedles = raw
@@ -237,7 +243,10 @@ function buildLogEntry(request, { requestPayload, response = null, responsePaylo
 		akto_vxlan_id: '0',
 		is_pending: 'false',
 		source: 'MIRRORING',
-		tag: '{\n  "service": "cloudflare"\n}',
+		tag: JSON.stringify({
+			service: 'cloudflare',
+			'gen-ai': 'Gen AI'
+		}),
 	};
 }
 
@@ -267,7 +276,7 @@ async function validateGuardrails(phase, logEntry, env) {
 			wrappedResponsePayload = true;
 		}
 	}
-	console.log('calling guardrails: ', JSON.stringify(payloadForGuardrails));
+	console.log(`calling guardrails: for phase ${phase} ->, ${JSON.stringify(payloadForGuardrails)}`);
 	const url = `${base}/api/validate/${phase}`;
 	let gr = { Allowed: true, Modified: false };
 	try {
@@ -277,7 +286,7 @@ async function validateGuardrails(phase, logEntry, env) {
 			body: JSON.stringify(payloadForGuardrails),
 		});
 		const text = await res.text();
-		console.log('response from guardrail: ', text);
+		console.log(`response from guardrail for phase ${phase} -> ${text}`);
 		try {
 			gr = JSON.parse(text);
 		} catch {
@@ -306,6 +315,31 @@ async function validateGuardrails(phase, logEntry, env) {
 		return { type: 'modified', gr };
 	}
 	return { type: 'proceed', gr };
+}
+
+function guardrailsServiceBaseUrl(env) {
+	const u = env?.AKTO_GUARDRAILS_URL;
+	if (typeof u === 'string' && u.trim() !== '') {
+		return u.trim().replace(/\/$/, '');
+	}
+	return null;
+}
+
+/** Base URL of the Akto Data Ingestion service (no trailing slash). */
+function dataIngestionIngestUrl(env) {
+	const u = env?.AKTO_DATA_INGESTION_URL;
+	if (typeof u !== 'string' || u.trim() === '') {
+		return null;
+	}
+	return `${u.trim().replace(/\/$/, '')}/api/ingestData`;
+}
+
+function dataIngestionApiKey(env) {
+	const k = env?.AKTO_DATA_INGESTION_TOKEN;
+	if (typeof k !== 'string' || k.trim() === '') {
+		return null;
+	}
+	return k.trim();
 }
 
 function guardrailsBlockedBody(gr) {
