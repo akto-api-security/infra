@@ -207,7 +207,7 @@ function shouldApplyGuardrails(request, env) {
 
 	const raw = env?.AKTO_ENDPOINTS_TO_GUARD;
 	if (typeof raw !== 'string' || raw.trim() === '') {
-		return false;
+		return true;
 	}
 	const requestPath = new URL(request.url).pathname.toLowerCase();
 	const guardedNeedles = raw
@@ -267,7 +267,7 @@ async function validateGuardrails(phase, logEntry, env) {
 			wrappedResponsePayload = true;
 		}
 	}
-	console.log('calling guardrails: ', JSON.stringify(payloadForGuardrails));
+	console.log(`calling guardrails: for phase ${phase} ->, ${JSON.stringify(payloadForGuardrails)}`);
 	const url = `${base}/api/validate/${phase}`;
 	let gr = { Allowed: true, Modified: false };
 	try {
@@ -277,7 +277,7 @@ async function validateGuardrails(phase, logEntry, env) {
 			body: JSON.stringify(payloadForGuardrails),
 		});
 		const text = await res.text();
-		console.log('response from guardrail: ', text);
+		console.log(`response from guardrail for phase ${phase} -> ${text}`);
 		try {
 			gr = JSON.parse(text);
 		} catch {
@@ -306,6 +306,14 @@ async function validateGuardrails(phase, logEntry, env) {
 		return { type: 'modified', gr };
 	}
 	return { type: 'proceed', gr };
+}
+
+function guardrailsServiceBaseUrl(env) {
+	const u = env?.AKTO_GUARDRAILS_URL;
+	if (typeof u === 'string' && u.trim() !== '') {
+		return u.trim().replace(/\/$/, '');
+	}
+	return null;
 }
 
 function guardrailsBlockedBody(gr) {
