@@ -30,11 +30,12 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 * Set AKTO_DATA_INGESTION_API_KEY via: wrangler secret put AKTO_DATA_INGESTION_API_KEY
 	 */
 	"vars": {
 		"APPLY_AKTO_GUARDRAILS": "true",
-		"AKTO_GUARDRAILS_URL": "<guardrails url>",
-		"AKTO_ENDPOINTS_TO_GUARD": "/api/v2,api/v3",
+		"AKTO_GUARDRAILS_URL": "<url>",
+		"AKTO_DATA_INGESTION_URL": "<url>"
 	},
 	/**
 	 * Static Assets
