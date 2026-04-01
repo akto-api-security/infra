@@ -37,7 +37,6 @@ export default {
 				requestForLog = request.clone();
 			}
 
-			// const response = await fetch(requestForFetch);
 			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
