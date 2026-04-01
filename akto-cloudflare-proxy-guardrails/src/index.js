@@ -111,9 +111,10 @@ export default {
 		const resHook = await validateGuardrails('response', afterEntry, env);
 
 		if (resHook.type === 'block') {
-			responseForClient = guardrailsBlockedResponse(resHook.gr);
-			responseForLogTraffic = responseForClient.clone();
-		} else if (resHook.type === 'modified') {
+			return guardrailsBlockedResponse(resHook.gr);
+		}
+
+		if (resHook.type === 'modified') {
 			responseForClient = modifiedUpstreamBodyResponse(response, resHook.gr.ModifiedPayload);
 			responseForLogTraffic = responseForClient.clone();
 		} else if (resLogStream != null) {
