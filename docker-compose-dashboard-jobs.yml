@@ -25,7 +25,7 @@ services:
         max-file: "3"
 
   job-crons:
-    image: aktosecurity/akto-api-security-dashboard:a-new-activate-traffic-jobs
+    image: aktosecurity/akto-api-security-dashboard:a-temp-new-activate-traffic-jobs
     env_file: ./docker-dashboard-jobs.env
     restart: always
     ports: 
