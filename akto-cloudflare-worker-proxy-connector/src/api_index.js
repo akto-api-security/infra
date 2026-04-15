@@ -46,13 +46,17 @@ function buildStreamingResponse(response) {
 		return { responseForClient: response, logPromise: Promise.resolve('') };
 	}
 	const logChunks = [];
-	const { readable, writable } = new TransformStream({
-		transform(chunk, controller) {
-			logChunks.push(chunk);
-			controller.enqueue(chunk);
+	const { readable, writable } = new TransformStream(
+		{
+			transform(chunk, controller) {
+				logChunks.push(chunk);
+				controller.enqueue(chunk);
+			},
 		},
-	});
-	const logPromise = response.body.pipeTo(writable).then(() => {
+		new ByteLengthQueuingStrategy({ highWaterMark: 1024 * 1024 }), // 1MB — don't let client backpressure stall the pipe
+		new ByteLengthQueuingStrategy({ highWaterMark: 1024 * 1024 }),
+	);
+	const logPromise = response.body.pipeTo(writable, { preventCancel: true }).then(() => {
 		const merged = new Uint8Array(logChunks.reduce((s, c) => s + c.length, 0));
 		let offset = 0;
 		for (const c of logChunks) {
@@ -75,8 +79,6 @@ async function logTraffic(request, resBody, response, env, opts = {}) {
 		let reqBody = '';
 
 		if (!opts.isWebSocket) {
-			reqBody = await readBodyAsText(request);
-
 			if (!(status >= 200 && status < 400)) {
 				console.log('⚠️ Skipped log: status', status);
 				return;
@@ -91,6 +93,8 @@ async function logTraffic(request, resBody, response, env, opts = {}) {
 				console.log('⚠️ Skipped log: not a target content-type', { reqContentType, resContentType });
 				return;
 			}
+
+			reqBody = await readBodyAsText(request);
 		}
 
 		const url = new URL(request.url);

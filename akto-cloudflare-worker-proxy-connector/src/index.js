@@ -10,7 +10,7 @@ export default {
       console.log("🔄 WebSocket upgrade detected");
 
       // Just proxy the connection
-      const response = await fetch(request);
+      const response = await proxyToUpstream(request);
 
       // Clone headers only (no body to tee here)
       ctx.waitUntil(logTraffic(request, response, env, { isWebSocket: true }));
@@ -29,7 +29,7 @@ export default {
       requestForLog = request.clone();
     }
 
-    const response = await fetch(requestForFetch);
+    const response = await proxyToUpstream(requestForFetch);
     console.log("⬅️ Upstream response:", response.status);
 
     let responseForClient, responseForLog;
@@ -106,7 +106,7 @@ async function logTraffic(request, response, env, opts = {}) {
     console.log("📤 Sending log entry to webhook...");
 
     const aktoReq = new Request(
-      "https://<DATA_INGESTION_SERVICE>/api/ingestData",
+      "https://unpadded-chemist-bazooka.ngrok-free.dev/api/ingestData",
       {
         method: "POST",
         headers: {
@@ -145,4 +145,23 @@ async function readBodyAsText(obj, maxSize = 64 * 1024) {
   } catch {
     return "";
   }
+}
+
+const TARGET = 'https://chat-bot--nayanantiya.replit.app';
+
+// Temporary for local/testing: rewrites URL to TARGET. Replace all proxyToUpstream(req) with fetch(req).
+async function proxyToUpstream(request) {
+	try {
+		const url = new URL(request.url);
+		const targetUrl = TARGET + url.pathname + url.search;
+		const newRequest = new Request(targetUrl, {
+			method: request.method,
+			headers: request.headers,
+			body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+			redirect: 'follow',
+		});
+		return await fetch(newRequest);
+	} catch (err) {
+		return new Response('Proxy error: ' + err.message, { status: 500 });
+	}
 }
