@@ -115,9 +115,10 @@ async function logTraffic(request, resBody, response, env, opts = {}) {
 
 		console.log('📤 Sending log entry to webhook...');
 
-		const aktoReq = new Request(`${env.AKTO_DATA_INGESTION_URL}/api/ingestData`, {
+        
+        const aktoReq = new Request("https://<DATA_INGESTION_SERVICE>/api/ingestData", {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+            headers: { "content-type": "application/json", "x-api-key": "YOUR_AKTO_API_KEY" },
 			body: JSON.stringify({ batchData: [logEntry] }),
 		});
 
