@@ -53,8 +53,8 @@ function buildStreamingResponse(response) {
 				controller.enqueue(chunk);
 			},
 		},
-		new ByteLengthQueuingStrategy({ highWaterMark: 1024 * 1024 }), // 1MB — don't let client backpressure stall the pipe
-		new ByteLengthQueuingStrategy({ highWaterMark: 1024 * 1024 }),
+		new ByteLengthQueuingStrategy({ highWaterMark: 256 * 1024 }),
+		new ByteLengthQueuingStrategy({ highWaterMark: 256 * 1024 }),
 	);
 	const logPromise = response.body.pipeTo(writable, { preventCancel: true }).then(() => {
 		const merged = new Uint8Array(logChunks.reduce((s, c) => s + c.length, 0));
