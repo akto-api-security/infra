@@ -10,9 +10,16 @@
 // AKTO_GUARDRAILS_URL          Base URL of the Akto guardrails service
 //                              e.g. https://your-guardrails-instance.example.com
 //
+// AKTO_BLOCK_MODE              Enable blocking mode. Values: true / false (default false)
+//                              true  — validate each request/response chunk inline;
+//                                      blocked chunks dropped, modified chunks replaced
+//                              false — fire-and-forget; guardrails called for observability
+//                                      only, never blocks the request
+//
 // AKTO_ENDPOINTS_TO_GUARD      (optional) Comma-separated path substrings to apply guardrails on.
 //                              If unset, all endpoints are guarded.
 //                              e.g. /api/chat,/api/completions
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default {
@@ -24,18 +31,13 @@ export default {
 
 		if (isWebSocket) {
 			console.log('🔄 WebSocket upgrade detected');
-
-			// Just proxy the connection
 			const response = await fetch(request);
-
-			// Clone headers only (no body to tee here)
 			ctx.waitUntil(logTrafficWithBody(request, '', '', response, env, { isWebSocket: true }));
-
 			return response;
 		}
 
 		const useGuardrails = shouldApplyGuardrails(request, env);
-		console.log(`Apply guardrails on ${request.url} -> ${useGuardrails}`)
+		console.log(`Apply guardrails on ${request.url} -> ${useGuardrails}`);
 
 		// Read request body once; reuse bytes for upstream + validation + logging
 		let reqBodyText = '';
@@ -60,16 +62,25 @@ export default {
 			return responseForClient;
 		}
 
-		// Guardrails on: validate request, block/modify before hitting upstream
+		// Guardrails on
+		let reqHook = { type: 'proceed', gr: null };
 		if (request.body) {
 			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyText, response: null, responsePayload: '' });
-			const reqHook = await validateGuardrails('request', beforeEntry, env);
-			if (reqHook.type === 'block') {
-				return guardrailsBlockedResponse(reqHook.gr);
-			}
-			if (reqHook.type === 'modified') {
-				reqBodyText = String(reqHook.gr.ModifiedPayload);
-				requestForFetch = requestWithBody(request, reqBodyText);
+
+			if (isBlockMode(env)) {
+				reqHook = await validateGuardrails('request', beforeEntry, env);
+				if (reqHook.type === 'block') {
+					return guardrailsBlockedResponse(reqHook.gr);
+				}
+				if (reqHook.type === 'modified') {
+					reqBodyText = String(reqHook.gr.ModifiedPayload);
+					requestForFetch = requestWithBody(request, reqBodyText);
+				}
+			} else {
+				ctx.waitUntil(
+					validateGuardrails('request', beforeEntry, env)
+						.catch((e) => console.error('guardrails request error:', e)),
+				);
 			}
 		}
 
@@ -78,37 +89,69 @@ export default {
 		const response = await fetch(requestForFetch);
 		console.log('⬅️ Upstream response:', response.status);
 
-		// Stream response to client, log in background (no response guardrails)
+		if (isBlockMode(env)) {
+			// Block mode: collect full body first, validate, then send to client
+			const resBody = await collectBody(response);
+			const afterEntry = buildLogEntry(request, { requestPayload: requestPayloadSent, response, responsePayload: resBody });
+			const resHook = await validateGuardrails('response', afterEntry, env);
+			if (resHook.type === 'block') {
+				return guardrailsBlockedResponse(resHook.gr);
+			}
+			const finalBody = resHook.type === 'modified' ? String(resHook.gr.ModifiedPayload) : resBody;
+			ctx.waitUntil(logTrafficWithBody(request, requestPayloadSent, resBody, response, env));
+			// Always strip content-length: body was collected/truncated (64KB max) and may be modified.
+			const headers = new Headers(response.headers);
+			headers.delete('content-length');
+			return new Response(finalBody, { status: response.status, statusText: response.statusText, headers });
+		}
+
+		// Async mode: stream to client immediately, validate + log in background
 		const { responseForClient, logPromise } = buildStreamingResponse(response);
 
 		ctx.waitUntil(
-			logPromise.then((resBody) => logTrafficWithBody(request, requestPayloadSent, resBody, response, env))
-				.catch((e) => console.error('pipe error:', e)),
+			logPromise.then(async (resBodyForValidate) => {
+				const afterEntry = buildLogEntry(request, {
+					requestPayload: requestPayloadSent,
+					response,
+					responsePayload: resBodyForValidate,
+				});
+				const resHook = await validateGuardrails('response', afterEntry, env);
+				if (resHook.type === 'block') {
+					console.log('🚫 Response blocked by guardrails (async, logged only)');
+				}
+				await logTrafficWithBody(request, requestPayloadSent, resBodyForValidate, response, env);
+			}).catch((e) => console.error('pipe error:', e)),
 		);
 
 		return responseForClient;
 	},
 };
 
-// onChunk(chunk, controller, decoder, encoder) — optional async per-chunk hook for sync guardrails.
-// If provided, it is responsible for calling controller.enqueue (or not, to drop the chunk).
-// If not provided, chunks are forwarded as-is.
-function buildStreamingResponse(response, onChunk = null) {
+// Drains full response body into chunks via WritableStream. Returns text string.
+async function collectBody(response, maxSize = 64 * 1024) {
+	if (!response.body) return '';
+	const chunks = [];
+	await response.body.pipeTo(new WritableStream({
+		write(chunk) {
+			chunks.push(chunk);
+		},
+	}));
+	const merged = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
+	let offset = 0;
+	for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+	return readBytesAsText(merged.buffer, maxSize);
+}
+
+function buildStreamingResponse(response) {
 	if (!response.body) {
 		return { responseForClient: response, logPromise: Promise.resolve('') };
 	}
 	const logChunks = [];
-	const decoder = new TextDecoder();
-	const encoder = new TextEncoder();
 	const { readable, writable } = new TransformStream(
 		{
-			async transform(chunk, controller) {
+			transform(chunk, controller) {
 				logChunks.push(chunk);
-				if (onChunk) {
-					await onChunk(chunk, controller, decoder, encoder);
-				} else {
-					controller.enqueue(chunk);
-				}
+				controller.enqueue(chunk);
 			},
 		},
 		new ByteLengthQueuingStrategy({ highWaterMark: 256 * 1024 }),
@@ -123,7 +166,9 @@ function buildStreamingResponse(response, onChunk = null) {
 	return { responseForClient: new Response(readable, response), logPromise };
 }
 
-
+function isBlockMode(env) {
+	return env?.AKTO_BLOCK_MODE === true || (typeof env?.AKTO_BLOCK_MODE === 'string' && env.AKTO_BLOCK_MODE.trim().toLowerCase() === 'true');
+}
 
 async function logTrafficWithBody(request, reqBody, resBody, response, env, opts = {}) {
 	try {
@@ -167,13 +212,11 @@ async function logTrafficWithBody(request, reqBody, resBody, response, env, opts
 			return;
 		}
 
-		const aktoReq = new Request(ingestUrl, {
+		const aktoResp = await fetch(ingestUrl, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json', 'Authorization': apiKey },
 			body: JSON.stringify({ batchData: [logEntry] }),
 		});
-
-		const aktoResp = await fetch(aktoReq);
 
 		if (aktoResp.status == 200) {
 			console.log('✅ Log sent to akto');
@@ -185,7 +228,6 @@ async function logTrafficWithBody(request, reqBody, resBody, response, env, opts
 	}
 }
 
-
 function readBytesAsText(buf, maxSize = 64 * 1024) {
 	return new TextDecoder().decode(new Uint8Array(buf).slice(0, maxSize));
 }
@@ -195,11 +237,10 @@ function shouldCapture(contentType) {
 	return targets.some((t) => contentType.toLowerCase().includes(t));
 }
 
-
 function shouldApplyGuardrails(request, env) {
 	const enabled = env?.APPLY_AKTO_GUARDRAILS === true || (typeof env?.APPLY_AKTO_GUARDRAILS === 'string' && (env.APPLY_AKTO_GUARDRAILS === 'true' || env.APPLY_AKTO_GUARDRAILS === '1'));
 	if (!enabled) return false;
-	if (request.method === 'DELETE') return false;
+	if (request.method === 'DELETE' || request.method === 'GET') return false;
 
 	const raw = env?.AKTO_ENDPOINTS_TO_GUARD;
 	if (typeof raw !== 'string' || raw.trim() === '') {
@@ -235,7 +276,7 @@ function buildLogEntry(request, { requestPayload, response = null, responsePaylo
 		source: 'MIRRORING',
 		tag: JSON.stringify({
 			service: 'cloudflare',
-			'gen-ai': 'Gen AI'
+			'gen-ai': 'Gen AI',
 		}),
 	};
 }
@@ -247,25 +288,23 @@ async function validateGuardrails(phase, logEntry, env) {
 		return { type: 'proceed', gr: null };
 	}
 	let payloadForGuardrails = { ...logEntry, contextSource: 'AGENTIC' };
-	let wrappedRequestPayload = false;
-
-	// Wrap non-JSON request body as { body: "..." }
-	if (typeof payloadForGuardrails.requestPayload === 'string') {
-		const t = payloadForGuardrails.requestPayload.trim();
+	let wrappedResponsePayload = false;
+	let isJson = true;
+	if (phase === 'response' && typeof payloadForGuardrails.responsePayload === 'string') {
+		const t = payloadForGuardrails.responsePayload.trim();
 		if (t !== '') {
-			let isJson = true;
 			try {
 				JSON.parse(t);
 			} catch {
 				isJson = false;
 			}
-			if (!isJson) {
-				payloadForGuardrails = {
-					...payloadForGuardrails,
-					requestPayload: JSON.stringify({ body: payloadForGuardrails.requestPayload }),
-				};
-				wrappedRequestPayload = true;
-			}
+		}
+		if (!isJson) {
+			payloadForGuardrails = {
+				...payloadForGuardrails,
+				responsePayload: JSON.stringify({ response: payloadForGuardrails.responsePayload }),
+			};
+			wrappedResponsePayload = true;
 		}
 	}
 	console.log(`calling guardrails: for phase ${phase} ->, ${JSON.stringify(payloadForGuardrails)}`);
@@ -284,14 +323,14 @@ async function validateGuardrails(phase, logEntry, env) {
 		} catch {
 			console.log('⚠️ Guardrails non-JSON response:', res.status, text.slice(0, 200));
 		}
-		if (wrappedRequestPayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
+		if (phase === 'response' && wrappedResponsePayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
 			try {
 				const parsed = JSON.parse(gr.ModifiedPayload);
-				if (parsed && typeof parsed === 'object' && typeof parsed.body === 'string') {
-					gr = { ...gr, ModifiedPayload: parsed.body };
+				if (parsed && typeof parsed === 'object' && typeof parsed.response === 'string') {
+					gr = { ...gr, ModifiedPayload: parsed.response };
 				}
 			} catch {
-				// keep ModifiedPayload as-is
+				// keep ModifiedPayload as-is if it's not the wrapper format
 			}
 		}
 	} catch (e) {
@@ -317,7 +356,6 @@ function guardrailsServiceBaseUrl(env) {
 	return null;
 }
 
-/** Base URL of the Akto Data Ingestion service (no trailing slash). */
 function dataIngestionIngestUrl(env) {
 	const u = env?.AKTO_DATA_INGESTION_URL;
 	if (typeof u !== 'string' || u.trim() === '') {
@@ -334,18 +372,13 @@ function dataIngestionApiKey(env) {
 	return k.trim();
 }
 
-function guardrailsBlockedBody(gr) {
-	return JSON.stringify({ error: 'Request is blocked due to security reasons', reason: gr?.Reason ?? '' });
-}
-
 function guardrailsBlockedResponse(gr) {
-	return new Response(guardrailsBlockedBody(gr), {
-		status: 400,
-		headers: { 'content-type': 'application/json' },
-	});
+	return new Response(
+		JSON.stringify({ error: 'Request is blocked due to security reasons', reason: gr?.Reason ?? '' }),
+		{ status: 400, headers: { 'content-type': 'application/json' } },
+	);
 }
 
-/** Same URL/method/headers; new body string for downstream (Content-Length stripped). */
 function requestWithBody(request, bodyText) {
 	const headers = new Headers(request.headers);
 	headers.delete('content-length');

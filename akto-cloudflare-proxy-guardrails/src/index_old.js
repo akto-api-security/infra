@@ -1,20 +1,3 @@
-// ─── Required Environment Variables ──────────────────────────────────────────
-//
-// AKTO_DATA_INGESTION_URL      Base URL of the Akto data ingestion service
-//                              e.g. https://your-akto-instance.example.com
-//
-// AKTO_DATA_INGESTION_TOKEN    API token for the data ingestion service
-//
-// APPLY_AKTO_GUARDRAILS        Enable guardrails validation. Values: true / false / 1
-//
-// AKTO_GUARDRAILS_URL          Base URL of the Akto guardrails service
-//                              e.g. https://your-guardrails-instance.example.com
-//
-// AKTO_ENDPOINTS_TO_GUARD      (optional) Comma-separated path substrings to apply guardrails on.
-//                              If unset, all endpoints are guarded.
-//                              e.g. /api/chat,/api/completions
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default {
 	async fetch(request, env, ctx) {
 		console.log('🚀 Worker handling:', request.method, request.url);
@@ -29,7 +12,7 @@ export default {
 			const response = await fetch(request);
 
 			// Clone headers only (no body to tee here)
-			ctx.waitUntil(logTrafficWithBody(request, '', '', response, env, { isWebSocket: true }));
+			ctx.waitUntil(logTraffic(request, response, env, { isWebSocket: true }));
 
 			return response;
 		}
@@ -37,95 +20,112 @@ export default {
 		const useGuardrails = shouldApplyGuardrails(request, env);
 		console.log(`Apply guardrails on ${request.url} -> ${useGuardrails}`)
 
-		// Read request body once; reuse bytes for upstream + validation + logging
-		let reqBodyText = '';
 		let requestForFetch;
-		if (request.body) {
-			const bodyBytes = await request.arrayBuffer();
-			reqBodyText = readBytesAsText(bodyBytes);
-			requestForFetch = new Request(request, { body: bodyBytes });
-		} else {
-			requestForFetch = request;
-		}
+		let requestForLog;
+		let responseForClient;
+		let responseForLogTraffic;
 
 		if (!useGuardrails) {
+			// Normal HTTP(S) traffic
+			let requestForFetch, requestForLog;
+			if (request.body) {
+				const [req1, req2] = request.body.tee();
+				requestForFetch = new Request(request, { body: req1 });
+				requestForLog = new Request(request, { body: req2 });
+			} else {
+				requestForFetch = request;
+				requestForLog = request.clone();
+			}
+
 			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
-			const { responseForClient, logPromise } = buildStreamingResponse(response);
-			ctx.waitUntil(
-				logPromise.then((resBody) => logTrafficWithBody(request, reqBodyText, resBody, response, env)).catch((e) => console.error('pipe error:', e)),
-			);
+			let responseForClient, responseForLog;
+			if (response.body) {
+				const [res1, res2] = response.body.tee();
+				responseForClient = new Response(res1, response);
+				responseForLog = new Response(res2, response);
+			} else {
+				responseForClient = response;
+				responseForLog = response.clone();
+			}
+
+			ctx.waitUntil(logTraffic(requestForLog, responseForLog, env));
 
 			return responseForClient;
 		}
 
-		// Guardrails on: validate request, block/modify before hitting upstream
+		// Guardrails on: request hook only when there is a body (validate reads stream)
+		let reqBodyForValidate = '';
+		let reqHook = { type: 'proceed', gr: null };
 		if (request.body) {
-			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyText, response: null, responsePayload: '' });
-			const reqHook = await validateGuardrails('request', beforeEntry, env);
+			const [reqUpstream, reqRest] = request.body.tee();
+			const [reqForGuard, reqForLogStream] = reqRest.tee();
+			reqBodyForValidate = await readBodyAsText(new Request(request, { body: reqForGuard }));
+
+			const beforeEntry = buildLogEntry(request, {
+				requestPayload: reqBodyForValidate,
+				response: null,
+				responsePayload: '',
+			});
+			reqHook = await validateGuardrails('request', beforeEntry, env);
 			if (reqHook.type === 'block') {
 				return guardrailsBlockedResponse(reqHook.gr);
 			}
 			if (reqHook.type === 'modified') {
-				reqBodyText = String(reqHook.gr.ModifiedPayload);
-				requestForFetch = requestWithBody(request, reqBodyText);
+				requestForFetch = requestWithBody(request, String(reqHook.gr.ModifiedPayload));
+				requestForLog = requestForFetch.clone();
+			} else {
+				requestForFetch = new Request(request, { body: reqUpstream });
+				requestForLog = new Request(request, { body: reqForLogStream });
 			}
+		} else {
+			requestForFetch = request;
+			requestForLog = request.clone();
 		}
 
-		const requestPayloadSent = reqBodyText;
+		const requestPayloadSent = reqHook.type === 'modified' ? String(reqHook.gr.ModifiedPayload) : request.body ? reqBodyForValidate : '';
 
 		const response = await fetch(requestForFetch);
 		console.log('⬅️ Upstream response:', response.status);
 
-		// Stream response to client, log in background (no response guardrails)
-		const { responseForClient, logPromise } = buildStreamingResponse(response);
+		let resBodyForValidate = '';
+		let resLogStream = null;
+		if (response.body) {
+			const [resClient, resRest] = response.body.tee();
+			const [resForGuard, logStream] = resRest.tee();
+			resLogStream = logStream;
+			responseForClient = new Response(resClient, response);
+			resBodyForValidate = await readBodyAsText(new Response(resForGuard, response));
+		} else {
+			responseForClient = response;
+			responseForLogTraffic = response.clone();
+		}
 
-		ctx.waitUntil(
-			logPromise.then((resBody) => logTrafficWithBody(request, requestPayloadSent, resBody, response, env))
-				.catch((e) => console.error('pipe error:', e)),
-		);
+		const afterEntry = buildLogEntry(request, {
+			requestPayload: requestPayloadSent,
+			response,
+			responsePayload: resBodyForValidate,
+		});
+		const resHook = await validateGuardrails('response', afterEntry, env);
 
+		if (resHook.type === 'block') {
+			return guardrailsBlockedResponse(resHook.gr);
+		}
+
+		if (resHook.type === 'modified') {
+			responseForClient = modifiedUpstreamBodyResponse(response, resHook.gr.ModifiedPayload);
+			responseForLogTraffic = responseForClient.clone();
+		} else if (resLogStream != null) {
+			responseForLogTraffic = new Response(resLogStream, response);
+		}
+
+		ctx.waitUntil(logTraffic(requestForLog, responseForLogTraffic, env));
 		return responseForClient;
 	},
 };
 
-// onChunk(chunk, controller, decoder, encoder) — optional async per-chunk hook for sync guardrails.
-// If provided, it is responsible for calling controller.enqueue (or not, to drop the chunk).
-// If not provided, chunks are forwarded as-is.
-function buildStreamingResponse(response, onChunk = null) {
-	if (!response.body) {
-		return { responseForClient: response, logPromise: Promise.resolve('') };
-	}
-	const logChunks = [];
-	const decoder = new TextDecoder();
-	const encoder = new TextEncoder();
-	const { readable, writable } = new TransformStream(
-		{
-			async transform(chunk, controller) {
-				logChunks.push(chunk);
-				if (onChunk) {
-					await onChunk(chunk, controller, decoder, encoder);
-				} else {
-					controller.enqueue(chunk);
-				}
-			},
-		},
-		new ByteLengthQueuingStrategy({ highWaterMark: 256 * 1024 }),
-		new ByteLengthQueuingStrategy({ highWaterMark: 256 * 1024 }),
-	);
-	const logPromise = response.body.pipeTo(writable, { preventCancel: true }).then(() => {
-		const merged = new Uint8Array(logChunks.reduce((s, c) => s + c.length, 0));
-		let offset = 0;
-		for (const c of logChunks) { merged.set(c, offset); offset += c.length; }
-		return readBytesAsText(merged.buffer);
-	});
-	return { responseForClient: new Response(readable, response), logPromise };
-}
-
-
-
-async function logTrafficWithBody(request, reqBody, resBody, response, env, opts = {}) {
+async function logTraffic(request, response, env, opts = {}) {
 	try {
 		console.log('📝 logTraffic running...');
 
@@ -133,7 +133,13 @@ async function logTrafficWithBody(request, reqBody, resBody, response, env, opts
 		const resContentType = response.headers.get('content-type') || '';
 		const status = response.status;
 
+		let reqBody = '';
+		let resBody = '';
+
 		if (!opts.isWebSocket) {
+			reqBody = await readBodyAsText(request);
+			resBody = await readBodyAsText(response);
+
 			if (!(status >= 200 && status < 400)) {
 				console.log('⚠️ Skipped log: status', status);
 				return;
@@ -185,21 +191,25 @@ async function logTrafficWithBody(request, reqBody, resBody, response, env, opts
 	}
 }
 
-
-function readBytesAsText(buf, maxSize = 64 * 1024) {
-	return new TextDecoder().decode(new Uint8Array(buf).slice(0, maxSize));
-}
-
 function shouldCapture(contentType) {
-	const targets = ['json', 'xml', 'x-www-form-urlencoded', 'soap', 'grpc', 'event-stream'];
+	const targets = ['json', 'xml', 'x-www-form-urlencoded', 'soap', 'grpc'];
 	return targets.some((t) => contentType.toLowerCase().includes(t));
 }
 
+async function readBodyAsText(obj, maxSize = 64 * 1024) {
+	try {
+		const buf = await obj.arrayBuffer();
+		const bytes = new Uint8Array(buf).slice(0, maxSize);
+		return new TextDecoder().decode(bytes);
+	} catch {
+		return '';
+	}
+}
 
 function shouldApplyGuardrails(request, env) {
 	const enabled = env?.APPLY_AKTO_GUARDRAILS === true || (typeof env?.APPLY_AKTO_GUARDRAILS === 'string' && (env.APPLY_AKTO_GUARDRAILS === 'true' || env.APPLY_AKTO_GUARDRAILS === '1'));
 	if (!enabled) return false;
-	if (request.method === 'DELETE') return false;
+	if (request.method === 'DELETE' || request.method === 'GET') return false;
 
 	const raw = env?.AKTO_ENDPOINTS_TO_GUARD;
 	if (typeof raw !== 'string' || raw.trim() === '') {
@@ -247,25 +257,23 @@ async function validateGuardrails(phase, logEntry, env) {
 		return { type: 'proceed', gr: null };
 	}
 	let payloadForGuardrails = { ...logEntry, contextSource: 'AGENTIC' };
-	let wrappedRequestPayload = false;
-
-	// Wrap non-JSON request body as { body: "..." }
-	if (typeof payloadForGuardrails.requestPayload === 'string') {
-		const t = payloadForGuardrails.requestPayload.trim();
+	let wrappedResponsePayload = false;
+	let isJson = true;
+	if (phase === 'response' && typeof payloadForGuardrails.responsePayload === 'string') {
+		const t = payloadForGuardrails.responsePayload.trim();
 		if (t !== '') {
-			let isJson = true;
 			try {
 				JSON.parse(t);
 			} catch {
 				isJson = false;
 			}
-			if (!isJson) {
-				payloadForGuardrails = {
-					...payloadForGuardrails,
-					requestPayload: JSON.stringify({ body: payloadForGuardrails.requestPayload }),
-				};
-				wrappedRequestPayload = true;
-			}
+		}
+		if (!isJson) {
+			payloadForGuardrails = {
+				...payloadForGuardrails,
+				responsePayload: JSON.stringify({ response: payloadForGuardrails.responsePayload }),
+			};
+			wrappedResponsePayload = true;
 		}
 	}
 	console.log(`calling guardrails: for phase ${phase} ->, ${JSON.stringify(payloadForGuardrails)}`);
@@ -284,14 +292,14 @@ async function validateGuardrails(phase, logEntry, env) {
 		} catch {
 			console.log('⚠️ Guardrails non-JSON response:', res.status, text.slice(0, 200));
 		}
-		if (wrappedRequestPayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
+		if (phase === 'response' && wrappedResponsePayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
 			try {
 				const parsed = JSON.parse(gr.ModifiedPayload);
-				if (parsed && typeof parsed === 'object' && typeof parsed.body === 'string') {
-					gr = { ...gr, ModifiedPayload: parsed.body };
+				if (parsed && typeof parsed === 'object' && typeof parsed.response === 'string') {
+					gr = { ...gr, ModifiedPayload: parsed.response };
 				}
 			} catch {
-				// keep ModifiedPayload as-is
+				// keep ModifiedPayload as-is if it's not the wrapper format
 			}
 		}
 	} catch (e) {
@@ -335,7 +343,10 @@ function dataIngestionApiKey(env) {
 }
 
 function guardrailsBlockedBody(gr) {
-	return JSON.stringify({ error: 'Request is blocked due to security reasons', reason: gr?.Reason ?? '' });
+	return JSON.stringify({
+		error: 'Request is blocked due to security reasons',
+		reason: gr?.Reason ?? '',
+	});
 }
 
 function guardrailsBlockedResponse(gr) {
@@ -354,4 +365,14 @@ function requestWithBody(request, bodyText) {
 		init.body = bodyText;
 	}
 	return new Request(request.url, init);
+}
+
+function modifiedUpstreamBodyResponse(originalResponse, payload) {
+	const headers = new Headers(originalResponse.headers);
+	headers.delete('content-length');
+	return new Response(payload, {
+		status: originalResponse.status,
+		statusText: originalResponse.statusText,
+		headers,
+	});
 }
