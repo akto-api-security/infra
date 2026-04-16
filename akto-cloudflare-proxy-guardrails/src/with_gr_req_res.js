@@ -10,9 +10,16 @@
 // AKTO_GUARDRAILS_URL          Base URL of the Akto guardrails service
 //                              e.g. https://your-guardrails-instance.example.com
 //
+// AKTO_BLOCK_MODE              Enable blocking mode. Values: true / false (default false)
+//                              true  — validate each request/response chunk inline;
+//                                      blocked chunks dropped, modified chunks replaced
+//                              false — fire-and-forget; guardrails called for observability
+//                                      only, never blocks the request
+//
 // AKTO_ENDPOINTS_TO_GUARD      (optional) Comma-separated path substrings to apply guardrails on.
 //                              If unset, all endpoints are guarded.
 //                              e.g. /api/chat,/api/completions
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default {
@@ -49,7 +56,7 @@ export default {
 		}
 
 		if (!useGuardrails) {
-			const response = await fetchstream(requestForFetch);
+			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
 			const { responseForClient, logPromise } = buildStreamingResponse(response);
@@ -60,30 +67,53 @@ export default {
 			return responseForClient;
 		}
 
-		// Guardrails on: validate request, block/modify before hitting upstream
+		// Guardrails on
+		let reqHook = { type: 'proceed', gr: null };
 		if (request.body) {
 			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyText, response: null, responsePayload: '' });
-			const reqHook = await validateGuardrails('request', beforeEntry, env);
-			if (reqHook.type === 'block') {
-				return guardrailsBlockedResponse(reqHook.gr);
-			}
-			if (reqHook.type === 'modified') {
-				reqBodyText = String(reqHook.gr.ModifiedPayload);
-				requestForFetch = requestWithBody(request, reqBodyText);
+
+			if (isBlockMode(env)) {
+				reqHook = await validateGuardrails('request', beforeEntry, env);
+				if (reqHook.type === 'block') {
+					return guardrailsBlockedResponse(reqHook.gr);
+				}
+				if (reqHook.type === 'modified') {
+					reqBodyText = String(reqHook.gr.ModifiedPayload);
+					requestForFetch = requestWithBody(request, reqBodyText);
+				}
+			} else {
+				ctx.waitUntil(
+					validateGuardrails('request', beforeEntry, env)
+						.catch((e) => console.error('guardrails request error:', e)),
+				);
 			}
 		}
 
 		const requestPayloadSent = reqBodyText;
 
-		const response = await fetchstream(requestForFetch);
+		const response = await fetch(requestForFetch);
 		console.log('⬅️ Upstream response:', response.status);
 
-		// Stream response to client, log in background (no response guardrails)
+		if (isBlockMode(env)) {
+			return handleBlockModeResponse(request, response, requestPayloadSent, env, ctx);
+		}
+
+		// Async mode: stream to client immediately, validate + log in background
 		const { responseForClient, logPromise } = buildStreamingResponse(response);
 
 		ctx.waitUntil(
-			logPromise.then((resBody) => logTrafficWithBody(request, requestPayloadSent, resBody, response, env))
-				.catch((e) => console.error('pipe error:', e)),
+			logPromise.then(async (resBodyForValidate) => {
+				const afterEntry = buildLogEntry(request, {
+					requestPayload: requestPayloadSent,
+					response,
+					responsePayload: resBodyForValidate,
+				});
+				const resHook = await validateGuardrails('response', afterEntry, env);
+				if (resHook.type === 'block') {
+					console.log('🚫 Response blocked by guardrails (async, logged only)');
+				}
+				await logTrafficWithBody(request, requestPayloadSent, resBodyForValidate, response, env);
+			}).catch((e) => console.error('pipe error:', e)),
 		);
 
 		return responseForClient;
@@ -123,7 +153,54 @@ function buildStreamingResponse(response, onChunk = null) {
 	return { responseForClient: new Response(readable, response), logPromise };
 }
 
+function isEventStream(response) {
+	return (response.headers.get('content-type') || '').includes('event-stream');
+}
 
+async function handleBlockModeResponse(request, response, requestPayloadSent, env, ctx) {
+	if (isEventStream(response)) {
+		const streamResponse = new Response(response.body, { status: response.status, statusText: response.statusText, headers: response.headers });
+		const { responseForClient, logPromise } = buildStreamingResponse(streamResponse, async (chunk, controller, decoder, encoder) => {
+			const chunkText = decoder.decode(chunk, { stream: true });
+			const resHook = await validateGuardrails(
+				'response',
+				buildLogEntry(request, { requestPayload: requestPayloadSent, response, responsePayload: chunkText }),
+				env,
+			);
+			if (resHook.type === 'block') {
+				console.log('🚫 Chunk blocked by guardrails, dropping');
+				return;
+			}
+			controller.enqueue(resHook.type === 'modified' ? encoder.encode(String(resHook.gr.ModifiedPayload)) : chunk);
+		});
+		ctx.waitUntil(
+			logPromise
+				.then((resBody) => logTrafficWithBody(request, requestPayloadSent, resBody, response, env))
+				.catch((e) => console.error('pipe error:', e)),
+		);
+		return responseForClient;
+	}
+
+	const resBody = readBytesAsText(await response.arrayBuffer());
+	const resHook = await validateGuardrails(
+		'response',
+		buildLogEntry(request, { requestPayload: requestPayloadSent, response, responsePayload: resBody }),
+		env,
+	);
+	if (resHook.type === 'block') return guardrailsBlockedResponse(resHook.gr);
+	ctx.waitUntil(logTrafficWithBody(request, requestPayloadSent, resBody, response, env));
+	if (resHook.type === 'modified') {
+		const finalBody = String(resHook.gr.ModifiedPayload);
+		const headers = new Headers(response.headers);
+		headers.set('content-length', new TextEncoder().encode(finalBody).byteLength.toString());
+		return new Response(finalBody, { status: response.status, statusText: response.statusText, headers });
+	}
+	return new Response(resBody, response);
+}
+
+function isBlockMode(env) {
+	return env?.AKTO_BLOCK_MODE === true || (typeof env?.AKTO_BLOCK_MODE === 'string' && env.AKTO_BLOCK_MODE.trim().toLowerCase() === 'true');
+}
 
 async function logTrafficWithBody(request, reqBody, resBody, response, env, opts = {}) {
 	try {
@@ -199,7 +276,7 @@ function shouldCapture(contentType) {
 function shouldApplyGuardrails(request, env) {
 	const enabled = env?.APPLY_AKTO_GUARDRAILS === true || (typeof env?.APPLY_AKTO_GUARDRAILS === 'string' && (env.APPLY_AKTO_GUARDRAILS === 'true' || env.APPLY_AKTO_GUARDRAILS === '1'));
 	if (!enabled) return false;
-	if (request.method === 'DELETE') return false;
+	if (request.method === 'DELETE' || request.method === 'GET') return false;
 
 	const raw = env?.AKTO_ENDPOINTS_TO_GUARD;
 	if (typeof raw !== 'string' || raw.trim() === '') {
