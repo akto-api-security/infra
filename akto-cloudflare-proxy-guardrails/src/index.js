@@ -49,7 +49,7 @@ export default {
 		}
 
 		if (!useGuardrails) {
-			const response = await fetchstream(requestForFetch);
+			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
 			const { responseForClient, logPromise } = buildStreamingResponse(response);
@@ -75,7 +75,7 @@ export default {
 
 		const requestPayloadSent = reqBodyText;
 
-		const response = await fetchstream(requestForFetch);
+		const response = await fetch(requestForFetch);
 		console.log('⬅️ Upstream response:', response.status);
 
 		// Stream response to client, log in background (no response guardrails)
