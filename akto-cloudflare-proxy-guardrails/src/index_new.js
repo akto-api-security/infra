@@ -78,10 +78,11 @@ export default {
 			requestForFetch = new Request(request, { body: reqUpstream });
 			requestForLog = new Request(request, { body: reqForLogStream });
 
+			reqBodyForValidate = await readBodyAsText(new Request(request, { body: reqForGuard }));
+			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyForValidate, response: null, responsePayload: '' });
+
 			if (isBlockMode(env)) {
-				// Sync: await validation, block or modify before fetching upstream
-				reqBodyForValidate = await readBodyAsText(new Request(request, { body: reqForGuard }));
-				const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyForValidate, response: null, responsePayload: '' });
+				// Sync: block or modify before fetching upstream
 				reqHook = await validateGuardrails('request', beforeEntry, env);
 				if (reqHook.type === 'block') {
 					return guardrailsBlockedResponse(reqHook.gr);
@@ -93,10 +94,8 @@ export default {
 			} else {
 				// Async: fire and forget, never blocks
 				ctx.waitUntil(
-					readBodyAsText(new Request(request, { body: reqForGuard })).then((body) => {
-						const beforeEntry = buildLogEntry(request, { requestPayload: body, response: null, responsePayload: '' });
-						return validateGuardrails('request', beforeEntry, env);
-					}).catch((e) => console.error('guardrails request error:', e)),
+					validateGuardrails('request', beforeEntry, env)
+						.catch((e) => console.error('guardrails request error:', e)),
 				);
 			}
 		} else {
@@ -406,15 +405,12 @@ function dataIngestionApiKey(env) {
 }
 
 function guardrailsBlockedBody(gr) {
-	return JSON.stringify({
-		error: 'Request is blocked due to security reasons',
-		reason: gr?.Reason ?? '',
-	});
+	return JSON.stringify({ error: 'Request is blocked due to security reasons' + gr?.Reason ?? '' });
 }
 
 function guardrailsBlockedResponse(gr) {
 	return new Response(guardrailsBlockedBody(gr), {
-		status: 400,
+		status: 200,
 		headers: { 'content-type': 'application/json' },
 	});
 }
