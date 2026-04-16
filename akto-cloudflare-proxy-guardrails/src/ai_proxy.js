@@ -120,12 +120,18 @@ async function logTraffic(request, resBody, response, env, opts = {}) {
 			}),
 		};
 
+		const ingestUrl = dataIngestionIngestUrl(env);
+		const apiKey = dataIngestionApiKey(env);
+		if (!ingestUrl) {
+			console.warn('⚠️ AKTO_DATA_INGESTION_URL or AKTO_DATA_INGESTION_TOKEN missing; skipping ingest');
+			return;
+		}
+
 		console.log('📤 Sending log entry to webhook...');
 
-        
-        const aktoReq = new Request("https://<DATA_INGESTION_SERVICE>/api/ingestData", {
+		const aktoReq = new Request(ingestUrl, {
 			method: 'POST',
-            headers: { "content-type": "application/json", "x-api-key": "YOUR_AKTO_API_KEY" },
+			headers: { 'content-type': 'application/json', 'Authorization': apiKey },
 			body: JSON.stringify({ batchData: [logEntry] }),
 		});
 
@@ -156,3 +162,16 @@ async function readBodyAsText(obj, maxSize = 64 * 1024) {
 		return '';
 	}
 }
+
+function dataIngestionIngestUrl(env) {
+	const u = env?.AKTO_DATA_INGESTION_URL;
+	if (typeof u !== 'string' || u.trim() === '') return null;
+	return `${u.trim().replace(/\/$/, '')}/api/ingestData`;
+}
+
+function dataIngestionApiKey(env) {
+	const k = env?.AKTO_DATA_INGESTION_TOKEN;
+	if (typeof k !== 'string' || k.trim() === '') return null;
+	return k.trim();
+}
+
