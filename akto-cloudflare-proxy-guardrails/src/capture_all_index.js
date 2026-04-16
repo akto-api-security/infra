@@ -31,81 +31,62 @@ export default {
 
 		if (isWebSocket) {
 			console.log('🔄 WebSocket upgrade detected');
-
-			// Just proxy the connection
 			const response = await fetch(request);
-
-			// Clone headers only (no body to tee here)
-			ctx.waitUntil(logTrafficWithBody(request, '', response, env, { isWebSocket: true }));
-
+			ctx.waitUntil(logTrafficWithBody(request, '', '', response, env, { isWebSocket: true }));
 			return response;
 		}
 
 		const useGuardrails = shouldApplyGuardrails(request, env);
-		console.log(`Apply guardrails on ${request.url} -> ${useGuardrails}`)
+		console.log(`Apply guardrails on ${request.url} -> ${useGuardrails}`);
 
+		// Read request body once; reuse bytes for upstream + validation + logging
+		let reqBodyText = '';
 		let requestForFetch;
-		let requestForLog;
+		if (request.body) {
+			const bodyBytes = await request.arrayBuffer();
+			reqBodyText = readBytesAsText(bodyBytes);
+			requestForFetch = new Request(request, { body: bodyBytes });
+		} else {
+			requestForFetch = request;
+		}
 
 		if (!useGuardrails) {
-			// Normal HTTP(S) traffic
-			if (request.body) {
-				const [req1, req2] = request.body.tee();
-				requestForFetch = new Request(request, { body: req1 });
-				requestForLog = new Request(request, { body: req2 });
-			} else {
-				requestForFetch = request;
-				requestForLog = request.clone();
-			}
-
-			const response = await proxyToUpstream(requestForFetch);
+			const response = await fetch(requestForFetch);
 			console.log('⬅️ Upstream response:', response.status);
 
 			const { responseForClient, logPromise } = buildStreamingResponse(response);
 			ctx.waitUntil(
-				logPromise.then((resBody) => logTrafficWithBody(requestForLog, resBody, response, env)).catch((e) => console.error('pipe error:', e)),
+				logPromise.then((resBody) => logTrafficWithBody(request, reqBodyText, resBody, response, env)).catch((e) => console.error('pipe error:', e)),
 			);
 
 			return responseForClient;
 		}
 
-		// Guardrails on: request hook only when there is a body (validate reads stream)
-		let reqBodyForValidate = '';
+		// Guardrails on
 		let reqHook = { type: 'proceed', gr: null };
 		if (request.body) {
-			const [reqUpstream, reqRest] = request.body.tee();
-			const [reqForGuard, reqForLogStream] = reqRest.tee();
-			requestForFetch = new Request(request, { body: reqUpstream });
-			requestForLog = new Request(request, { body: reqForLogStream });
-
-			reqBodyForValidate = await readBodyAsText(new Request(request, { body: reqForGuard }));
-			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyForValidate, response: null, responsePayload: '' });
+			const beforeEntry = buildLogEntry(request, { requestPayload: reqBodyText, response: null, responsePayload: '' });
 
 			if (isBlockMode(env)) {
-				// Sync: block or modify before fetching upstream
 				reqHook = await validateGuardrails('request', beforeEntry, env);
 				if (reqHook.type === 'block') {
 					return guardrailsBlockedResponse(reqHook.gr);
 				}
 				if (reqHook.type === 'modified') {
-					requestForFetch = requestWithBody(request, String(reqHook.gr.ModifiedPayload));
-					requestForLog = requestForFetch.clone();
+					reqBodyText = String(reqHook.gr.ModifiedPayload);
+					requestForFetch = requestWithBody(request, reqBodyText);
 				}
 			} else {
-				// Async: fire and forget, never blocks
 				ctx.waitUntil(
 					validateGuardrails('request', beforeEntry, env)
 						.catch((e) => console.error('guardrails request error:', e)),
 				);
 			}
-		} else {
-			requestForFetch = request;
-			requestForLog = request.clone();
 		}
 
-		const requestPayloadSent = reqHook.type === 'modified' ? String(reqHook.gr.ModifiedPayload) : request.body ? reqBodyForValidate : '';
+		const requestPayloadSent = reqBodyText;
 
-		const response = await proxyToUpstream(requestForFetch);
+		const response = await fetch(requestForFetch);
 		console.log('⬅️ Upstream response:', response.status);
 
 		if (isBlockMode(env)) {
@@ -117,8 +98,11 @@ export default {
 				return guardrailsBlockedResponse(resHook.gr);
 			}
 			const finalBody = resHook.type === 'modified' ? String(resHook.gr.ModifiedPayload) : resBody;
-			ctx.waitUntil(logTrafficWithBody(requestForLog, resBody, response, env));
-			return new Response(finalBody, response);
+			ctx.waitUntil(logTrafficWithBody(request, requestPayloadSent, resBody, response, env));
+			// Always strip content-length: body was collected/truncated (64KB max) and may be modified.
+			const headers = new Headers(response.headers);
+			headers.delete('content-length');
+			return new Response(finalBody, { status: response.status, statusText: response.statusText, headers });
 		}
 
 		// Async mode: stream to client immediately, validate + log in background
@@ -135,7 +119,7 @@ export default {
 				if (resHook.type === 'block') {
 					console.log('🚫 Response blocked by guardrails (async, logged only)');
 				}
-				await logTrafficWithBody(requestForLog, resBodyForValidate, response, env);
+				await logTrafficWithBody(request, requestPayloadSent, resBodyForValidate, response, env);
 			}).catch((e) => console.error('pipe error:', e)),
 		);
 
@@ -155,7 +139,7 @@ async function collectBody(response, maxSize = 64 * 1024) {
 	const merged = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
 	let offset = 0;
 	for (const c of chunks) { merged.set(c, offset); offset += c.length; }
-	return new TextDecoder().decode(merged).slice(0, maxSize);
+	return readBytesAsText(merged.buffer, maxSize);
 }
 
 function buildStreamingResponse(response) {
@@ -177,7 +161,7 @@ function buildStreamingResponse(response) {
 		const merged = new Uint8Array(logChunks.reduce((s, c) => s + c.length, 0));
 		let offset = 0;
 		for (const c of logChunks) { merged.set(c, offset); offset += c.length; }
-		return new TextDecoder().decode(merged).slice(0, 64 * 1024);
+		return readBytesAsText(merged.buffer);
 	});
 	return { responseForClient: new Response(readable, response), logPromise };
 }
@@ -186,16 +170,13 @@ function isBlockMode(env) {
 	return env?.AKTO_BLOCK_MODE === true || (typeof env?.AKTO_BLOCK_MODE === 'string' && env.AKTO_BLOCK_MODE.trim().toLowerCase() === 'true');
 }
 
-// logTraffic variant that accepts pre-read body strings (avoids double-reading streams)
-async function logTrafficWithBody(request, resBody, response, env, opts = {}) {
+async function logTrafficWithBody(request, reqBody, resBody, response, env, opts = {}) {
 	try {
 		console.log('📝 logTraffic running...');
 
 		const reqContentType = request.headers.get('content-type') || '';
 		const resContentType = response.headers.get('content-type') || '';
 		const status = response.status;
-
-		let reqBody = '';
 
 		if (!opts.isWebSocket) {
 			if (!(status >= 200 && status < 400)) {
@@ -212,8 +193,6 @@ async function logTrafficWithBody(request, resBody, response, env, opts = {}) {
 				console.log('⚠️ Skipped log: not a target content-type', { reqContentType, resContentType });
 				return;
 			}
-
-			reqBody = await readBodyAsText(request);
 		}
 
 		const logEntry = buildLogEntry(request, {
@@ -233,13 +212,11 @@ async function logTrafficWithBody(request, resBody, response, env, opts = {}) {
 			return;
 		}
 
-		const aktoReq = new Request(ingestUrl, {
+		const aktoResp = await fetch(ingestUrl, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json', 'Authorization': apiKey },
 			body: JSON.stringify({ batchData: [logEntry] }),
 		});
-
-		const aktoResp = await fetch(aktoReq);
 
 		if (aktoResp.status == 200) {
 			console.log('✅ Log sent to akto');
@@ -251,20 +228,13 @@ async function logTrafficWithBody(request, resBody, response, env, opts = {}) {
 	}
 }
 
+function readBytesAsText(buf, maxSize = 64 * 1024) {
+	return new TextDecoder().decode(new Uint8Array(buf).slice(0, maxSize));
+}
 
 function shouldCapture(contentType) {
 	const targets = ['json', 'xml', 'x-www-form-urlencoded', 'soap', 'grpc', 'event-stream'];
 	return targets.some((t) => contentType.toLowerCase().includes(t));
-}
-
-async function readBodyAsText(obj, maxSize = 64 * 1024) {
-	try {
-		const buf = await obj.arrayBuffer();
-		const bytes = new Uint8Array(buf).slice(0, maxSize);
-		return new TextDecoder().decode(bytes);
-	} catch {
-		return '';
-	}
 }
 
 function shouldApplyGuardrails(request, env) {
@@ -306,7 +276,7 @@ function buildLogEntry(request, { requestPayload, response = null, responsePaylo
 		source: 'MIRRORING',
 		tag: JSON.stringify({
 			service: 'cloudflare',
-			'gen-ai': 'Gen AI'
+			'gen-ai': 'Gen AI',
 		}),
 	};
 }
@@ -386,7 +356,6 @@ function guardrailsServiceBaseUrl(env) {
 	return null;
 }
 
-/** Base URL of the Akto Data Ingestion service (no trailing slash). */
 function dataIngestionIngestUrl(env) {
 	const u = env?.AKTO_DATA_INGESTION_URL;
 	if (typeof u !== 'string' || u.trim() === '') {
@@ -403,18 +372,13 @@ function dataIngestionApiKey(env) {
 	return k.trim();
 }
 
-function guardrailsBlockedBody(gr) {
-	return JSON.stringify({ error: 'Request is blocked due to security reasons' + gr?.Reason ?? '' });
-}
-
 function guardrailsBlockedResponse(gr) {
-	return new Response(guardrailsBlockedBody(gr), {
-		status: 200,
-		headers: { 'content-type': 'application/json' },
-	});
+	return new Response(
+		JSON.stringify({ error: 'Request is blocked due to security reasons', reason: gr?.Reason ?? '' }),
+		{ status: 400, headers: { 'content-type': 'application/json' } },
+	);
 }
 
-/** Same URL/method/headers; new body string for downstream (Content-Length stripped). */
 function requestWithBody(request, bodyText) {
 	const headers = new Headers(request.headers);
 	headers.delete('content-length');
@@ -423,33 +387,4 @@ function requestWithBody(request, bodyText) {
 		init.body = bodyText;
 	}
 	return new Request(request.url, init);
-}
-
-function modifiedUpstreamBodyResponse(originalResponse, payload) {
-	const headers = new Headers(originalResponse.headers);
-	headers.delete('content-length');
-	return new Response(payload, {
-		status: originalResponse.status,
-		statusText: originalResponse.statusText,
-		headers,
-	});
-}
-
-const TARGET = 'https://test-chat-botzip--nayanantiya1.replit.app';
-
-// Temporary for local/testing: rewrites URL to TARGET. Replace all proxyToUpstream(req) with fetch(req).
-async function proxyToUpstream(request) {
-	try {
-		const url = new URL(request.url);
-		const targetUrl = TARGET + url.pathname + url.search;
-		const newRequest = new Request(targetUrl, {
-			method: request.method,
-			headers: request.headers,
-			body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-			redirect: 'follow',
-		});
-		return await fetch(newRequest);
-	} catch (err) {
-		return new Response('Proxy error: ' + err.message, { status: 500 });
-	}
 }
