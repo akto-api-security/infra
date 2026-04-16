@@ -247,23 +247,25 @@ async function validateGuardrails(phase, logEntry, env) {
 		return { type: 'proceed', gr: null };
 	}
 	let payloadForGuardrails = { ...logEntry, contextSource: 'AGENTIC' };
-	let wrappedResponsePayload = false;
-	let isJson = true;
-	if (phase === 'response' && typeof payloadForGuardrails.responsePayload === 'string') {
-		const t = payloadForGuardrails.responsePayload.trim();
+	let wrappedRequestPayload = false;
+
+	// Wrap non-JSON request body as { body: "..." }
+	if (typeof payloadForGuardrails.requestPayload === 'string') {
+		const t = payloadForGuardrails.requestPayload.trim();
 		if (t !== '') {
+			let isJson = true;
 			try {
 				JSON.parse(t);
 			} catch {
 				isJson = false;
 			}
-		}
-		if (!isJson) {
-			payloadForGuardrails = {
-				...payloadForGuardrails,
-				responsePayload: JSON.stringify({ response: payloadForGuardrails.responsePayload }),
-			};
-			wrappedResponsePayload = true;
+			if (!isJson) {
+				payloadForGuardrails = {
+					...payloadForGuardrails,
+					requestPayload: JSON.stringify({ body: payloadForGuardrails.requestPayload }),
+				};
+				wrappedRequestPayload = true;
+			}
 		}
 	}
 	console.log(`calling guardrails: for phase ${phase} ->, ${JSON.stringify(payloadForGuardrails)}`);
@@ -282,14 +284,14 @@ async function validateGuardrails(phase, logEntry, env) {
 		} catch {
 			console.log('⚠️ Guardrails non-JSON response:', res.status, text.slice(0, 200));
 		}
-		if (phase === 'response' && wrappedResponsePayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
+		if (wrappedRequestPayload && gr?.Modified === true && typeof gr?.ModifiedPayload === 'string') {
 			try {
 				const parsed = JSON.parse(gr.ModifiedPayload);
-				if (parsed && typeof parsed === 'object' && typeof parsed.response === 'string') {
-					gr = { ...gr, ModifiedPayload: parsed.response };
+				if (parsed && typeof parsed === 'object' && typeof parsed.body === 'string') {
+					gr = { ...gr, ModifiedPayload: parsed.body };
 				}
 			} catch {
-				// keep ModifiedPayload as-is if it's not the wrapper format
+				// keep ModifiedPayload as-is
 			}
 		}
 	} catch (e) {
