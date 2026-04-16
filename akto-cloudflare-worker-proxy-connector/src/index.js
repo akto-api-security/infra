@@ -114,7 +114,10 @@ async function logTraffic(request, resBody, response, env, opts = {}) {
 			akto_vxlan_id: '0',
 			is_pending: 'false',
 			source: 'MIRRORING',
-			tag: '{\n  "service": "cloudflare"\n}',
+			tag: JSON.stringify({
+				service: 'cloudflare',
+				'gen-ai': 'Gen AI'
+			}),
 		};
 
 		console.log('📤 Sending log entry to webhook...');
