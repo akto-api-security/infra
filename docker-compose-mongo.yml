@@ -3,9 +3,12 @@ version: '3.3'
 services:
   mongo:
     container_name: mongo
-    image: mongo
+    image: mongo:7.0.4
     restart: always
     volumes:
-      - ./data:/data/db
+      - mongodataAkto:/data/db
     ports:
       - "27017:27017"
+
+volumes:
+  mongodataAkto:
