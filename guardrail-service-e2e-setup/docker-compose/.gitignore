@@ -1,0 +1,6 @@
+# Actual env files contain credentials — never commit these
+*.env
+
+# Keep the example and templates
+!.env.example
+!*.env.template

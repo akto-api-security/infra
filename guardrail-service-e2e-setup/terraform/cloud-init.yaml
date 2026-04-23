@@ -1,0 +1,78 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+
+write_files:
+  - path: /tmp/docker-compose.yml
+    permissions: '0644'
+    content: |
+      ${indent(6, docker_compose_content)}
+
+  - path: /tmp/data-ingestion-docker.env
+    permissions: '0600'
+    content: |
+      ${indent(6, data_ingestion_env)}
+
+  - path: /tmp/docker-account-job-executor.env
+    permissions: '0600'
+    content: |
+      ${indent(6, account_job_executor_env)}
+
+  - path: /tmp/docker-mini-runtime.env
+    permissions: '0600'
+    content: |
+      ${indent(6, mini_runtime_env)}
+
+  - path: /tmp/docker-guardrails-service-kafka.env
+    permissions: '0600'
+    content: |
+      ${indent(6, guardrails_kafka_env)}
+
+  - path: /tmp/docker-guardrails-service.env
+    permissions: '0600'
+    content: |
+      ${indent(6, guardrails_service_env)}
+
+  - path: /tmp/akto.env
+    permissions: '0600'
+    content: |
+      AKTO_KAFKA_IP=${akto_kafka_ip}
+
+runcmd:
+  # Move files to azureuser home directory and set ownership
+  - mv /tmp/docker-compose.yml /home/azureuser/docker-compose.yml
+  - mv /tmp/data-ingestion-docker.env /home/azureuser/data-ingestion-docker.env
+  - mv /tmp/docker-account-job-executor.env /home/azureuser/docker-account-job-executor.env
+  - mv /tmp/docker-mini-runtime.env /home/azureuser/docker-mini-runtime.env
+  - mv /tmp/docker-guardrails-service-kafka.env /home/azureuser/docker-guardrails-service-kafka.env
+  - mv /tmp/docker-guardrails-service.env /home/azureuser/docker-guardrails-service.env
+  - mv /tmp/akto.env /home/azureuser/.env
+  - chown -R azureuser:azureuser /home/azureuser/
+
+  # Install Docker
+  - curl -fsSL https://get.docker.com -o get-docker.sh
+  - sh get-docker.sh
+  - usermod -aG docker azureuser
+
+  # Install Docker Compose
+  - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+
+  # Start Docker service
+  - systemctl start docker
+  - systemctl enable docker
+
+  # Start docker-compose application
+  - cd /home/azureuser && docker-compose up -d
+
+  # Wait for services to be healthy
+  - sleep 10
+
+final_message: "Docker environment setup complete! Application is running."
