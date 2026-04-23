@@ -4,3 +4,9 @@
 # Keep the example and templates
 !.env.example
 !*.env.template
+
+data-kafka-data
+data-kafka-secrets
+data-zoo-data
+data-zoo-logs
+data-zoo-secrets
