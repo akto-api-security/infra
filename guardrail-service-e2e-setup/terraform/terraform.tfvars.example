@@ -1,0 +1,18 @@
+# Copy this file to terraform.tfvars and customize values
+
+resource_group_name  = "prod-rg-central-us"
+location             = "centralus"
+vm_name              = "YOUR_VM_NAME_HERE"
+vm_size              = "Standard_D4s_v3" # 4 vCPUs, 16GB RAM (recommended for Kafka + services)
+admin_username       = "azureuser"
+ssh_public_key_path  = "~/.ssh/id_rsa.pub"  # Your SSH public key (port 22 closed by default)
+app_port             = 8080
+
+# REQUIRED: Akto Configuration
+akto_token              = "YOUR_AKTO_TOKEN_HERE"
+azure_connection_string = "YOUR_AZURE_CONNECTION_STRING_HERE"
+
+# Optional: Kafka IP (defaults to VM private IP if not set)
+# akto_kafka_ip = "10.0.1.4"
+
+tags = {}

@@ -1,0 +1,11 @@
+# Local variable overrides — never commit these
+terraform.tfvars
+
+# State files contain sensitive infrastructure details
+*.tfstate
+*.tfstate.backup
+terraform.tfstate.d/
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
