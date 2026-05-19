@@ -13,6 +13,7 @@ services:
   redis:
     container_name: redis
     image: redis:latest
+    command: ["redis-server", "--notify-keyspace-events", "KEA"]
     volumes:
       - redis_data:/data
     ports:
@@ -20,6 +21,53 @@ services:
     restart: always
     labels:
       com.centurylinklabs.watchtower.enable: "false"
+
+  webhook-site-nginx:
+    image: nginx:alpine
+    container_name: webhook-site-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # Minimal: only POST /token, GET /token/{uuid}/requests, and /{uuid} capture (no UI)
+      - ./nginx/nginx-minimal.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - webhook-site
+
+  webhook-site:
+    image: webhooksite/webhook.site
+    container_name: webhook-site
+    hostname: webhook-site
+    restart: always
+    expose:
+      - "80"
+    env_file:
+      - docker-compose.webhook.env
+    depends_on:
+      - redis
+
+  laravel-echo-server:
+    image: webhooksite/laravel-echo-server
+    container_name: laravel-echo-server
+    command:
+      - exec
+      - laravel-echo-server
+      - start
+      - --force
+    env_file:
+      - docker-compose.webhook.env
+    depends_on:
+      - webhook-site
+      - redis
+
+  akto-test-util-worker:
+    image: public.ecr.aws/aktosecurity/akto-test-util-worker:latest
+    container_name: akto-test-util-worker
+    restart: always
+    env_file:
+      - docker-compose.webhook.env
+    depends_on:
+      - redis
 
   watchtower:
     image: containrrr/watchtower
