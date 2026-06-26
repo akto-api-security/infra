@@ -5,7 +5,7 @@ services:
     image: aktosecurity/akto-agent-guard-worker:a-feature-agent-guard-standalone
     container_name: agent-guard-executor
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8080:8090"
     env_file:
       - ./docker-compose-agent-guard.env
     environment:
