@@ -1,0 +1,42 @@
+services:
+  executor:
+    image: aktosecurity/akto-agent-guard-worker:a-feature-agent-guard-standalone
+    container_name: agent-guard-executor
+    ports:
+      - "127.0.0.1:8090:8090"
+    env_file:
+      - ./docker-compose-agent-guard.env
+    environment:
+      ANONYMIZER_URL: http://anonymizer:8093
+    depends_on:
+      anonymizer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - agent-guard-network
+
+  anonymizer:
+    image: aktosecurity/akto-agent-guard-anonymizer:a-feature-agent-guard-standalone
+    container_name: agent-guard-anonymizer
+    expose:
+      - "8093"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8093
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - agent-guard-network
+
+networks:
+  agent-guard-network:
+    driver: bridge
