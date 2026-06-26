@@ -5,3 +5,5 @@ data-redis-*/*
 data/*
 .idea/
 mirroring-data
+.vscode/**
+.DS_Store
