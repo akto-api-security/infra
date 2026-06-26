@@ -1,3 +1,5 @@
+version: '2.1'
+
 services:
   executor:
     image: aktosecurity/akto-agent-guard-worker:a-feature-agent-guard-standalone
@@ -9,14 +11,13 @@ services:
     environment:
       ANONYMIZER_URL: http://anonymizer:8093
     depends_on:
-      anonymizer:
-        condition: service_healthy
+      - anonymizer
+    restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
       interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 15s
     networks:
       - agent-guard-network
 
@@ -28,12 +29,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8093
+    restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health')"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s
     networks:
       - agent-guard-network
 
