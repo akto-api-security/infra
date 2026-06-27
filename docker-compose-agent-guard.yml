@@ -10,16 +10,16 @@ services:
       - ./docker-compose-agent-guard.env
     environment:
       ANONYMIZER_URL: http://anonymizer:8093
-      # Semantic cache (see worker-py/src/cache.py). CACHE_MODE + CACHE_* come
-      # from the env file; these two point at the sidecars below.
+      # Semantic cache (see worker-py/src/cache.py). EMBEDDER_URL points at the
+      # local sidecar below; CACHE_MODE, CACHE_*, and REDIS_URL come from the env
+      # file — REDIS_URL targets the separate Redis instance
+      # (docker-compose-redis.yml), e.g. redis://:<password>@<redis-host>:6379.
       EMBEDDER_URL: http://embedder:8094
-      REDIS_URL: redis://redis:6379
     depends_on:
       # Start-order only (no health gate): the cache is fail-open, so the scan
-      # API must not block on the slow-to-load embedder / on redis.
+      # API must not block on the slow-to-load embedder.
       - anonymizer
       - embedder
-      - redis
     restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
@@ -63,27 +63,6 @@ services:
       start_period: 90s
     networks:
       - agent-guard-network
-
-  redis:
-    # redis-stack-server bundles the RediSearch module the vector cache needs;
-    # plain redis has no FT.* commands and the cache silently no-ops against it.
-    image: redis/redis-stack-server:7.4.0-v1
-    container_name: agent-guard-redis
-    expose:
-      - "6379"
-    restart: always
-    volumes:
-      - agent-guard-redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    networks:
-      - agent-guard-network
-
-volumes:
-  agent-guard-redis-data:
 
 networks:
   agent-guard-network:
