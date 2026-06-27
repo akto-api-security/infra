@@ -8,10 +8,10 @@
 # Must be redis-stack-server (not plain redis): the vector cache needs the
 # RediSearch module (FT.* commands).
 #
-# Auth: set REDIS_PASSWORD in the environment or a `.env` beside this file before
-# `docker compose -f docker-compose-redis.yml up -d`. Strongly recommended since
-# the port is published to the host and reachable from other instances. Also
-# restrict access at the firewall/security-group to the agent-guard host(s).
+# Auth: REDIS_PASSWORD is REQUIRED — set it in the environment or a `.env` beside
+# this file before `docker-compose -f docker-compose-redis.yml up -d`. On GCP the
+# startup-script fetches it from Secret Manager and writes it to ~/akto/infra/.env.
+# Also restrict access at the firewall/security-group to the agent-guard host(s).
 
 services:
   redis:
@@ -21,14 +21,14 @@ services:
     ports:
       - "6379:6379"
     environment:
-      # AOF persistence so the warmed cache survives restarts; require a password
-      # when REDIS_PASSWORD is set (empty → no auth, fine only for a locked-down
-      # private network).
-      REDIS_ARGS: "--appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}"
+      # AOF persistence so the warmed cache survives restarts; REDIS_PASSWORD is
+      # required (compose errors out if unset). Kept a single ${VAR} / ${VAR:?}
+      # form so it works under docker-compose v1 used by the GCP cf-deploy flow.
+      REDIS_ARGS: "--appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"
     volumes:
       - agent-guard-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:?REDIS_PASSWORD must be set} ping | grep -q PONG"]
       interval: 15s
       timeout: 5s
       retries: 5
