@@ -1,0 +1,37 @@
+# Dedicated Redis instance for the Agent Guard semantic cache.
+#
+# Deploy this on its OWN host/instance. The agent-guard stack
+# (docker-compose-agent-guard.yml) reaches it over the network via REDIS_URL
+# (set in docker-compose-agent-guard.env), e.g.
+#   REDIS_URL=redis://:<password>@<this-host>:6379
+#
+# Must be redis-stack-server (not plain redis): the vector cache needs the
+# RediSearch module (FT.* commands).
+#
+# Auth: set REDIS_PASSWORD in the environment or a `.env` beside this file before
+# `docker compose -f docker-compose-redis.yml up -d`. Strongly recommended since
+# the port is published to the host and reachable from other instances. Also
+# restrict access at the firewall/security-group to the agent-guard host(s).
+
+services:
+  redis:
+    image: redis/redis-stack-server:7.4.0-v1
+    container_name: agent-guard-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    environment:
+      # AOF persistence so the warmed cache survives restarts; require a password
+      # when REDIS_PASSWORD is set (empty → no auth, fine only for a locked-down
+      # private network).
+      REDIS_ARGS: "--appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}"
+    volumes:
+      - agent-guard-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  agent-guard-redis-data:
