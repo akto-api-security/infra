@@ -35,6 +35,11 @@ services:
     volumes:
       - ./data-kafka-data:/var/lib/kafka/data
       - ./data-kafka-secrets:/etc/kafka/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"
     labels:
       com.centurylinklabs.watchtower.enable: "false"
 
