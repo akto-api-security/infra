@@ -8,18 +8,6 @@ services:
       - "8080:8090"
     env_file:
       - ./docker-compose-agent-guard.env
-    environment:
-      ANONYMIZER_URL: http://anonymizer:8093
-      # Semantic cache (see worker-py/src/cache.py). EMBEDDER_URL points at the
-      # local sidecar below; CACHE_MODE, CACHE_*, and REDIS_URL come from the env
-      # file — REDIS_URL targets the separate Redis instance
-      # (docker-compose-redis.yml), e.g. redis://:<password>@<redis-host>:6379.
-      EMBEDDER_URL: http://embedder:8094
-    depends_on:
-      # Start-order only (no health gate): the cache is fail-open, so the scan
-      # API must not block on the slow-to-load embedder.
-      - anonymizer
-      - embedder
     restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
@@ -31,53 +19,3 @@ services:
       options:
         max-size: "100m"
         max-file: "2"
-    networks:
-      - agent-guard-network
-
-  anonymizer:
-    image: aktosecurity/akto-agent-guard-anonymizer:a-feature-agent-guard-standalone
-    container_name: agent-guard-anonymizer
-    expose:
-      - "8093"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PORT=8093
-    restart: always
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health')"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "2"
-    networks:
-      - agent-guard-network
-
-  embedder:
-    image: aktosecurity/akto-agent-guard-embedder:a-feature-agent-guard-standalone
-    container_name: agent-guard-embedder
-    expose:
-      - "8094"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PORT=8094
-    restart: always
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8094/health')"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "2"
-    networks:
-      - agent-guard-network
-
-networks:
-  agent-guard-network:
-    driver: bridge
