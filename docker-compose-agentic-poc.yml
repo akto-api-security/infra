@@ -95,7 +95,7 @@ services:
         max-file: "2"
 
   data-ingestion-service:
-    image: aktosecurity/data-ingestion-service:latest
+    image: aktosecurity/data-ingestion-service:a-feature-agent-guard-standalone
     env_file: ./data-ingestion-docker.env
     restart: always
     ports:
