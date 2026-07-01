@@ -71,7 +71,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   guardrails-service:
-    image: aktosecurity/guardrails-service:a-feature-agent-guard-standalone
+    image: aktosecurity/guardrails-service:a-feature-agent-guard-standalone-2
     env_file: ./docker-guardrails-service-kafka.env
     restart: always
     ports:
@@ -83,7 +83,7 @@ services:
         max-file: "3"
 
   guardrails-service-http:
-    image: aktosecurity/guardrails-service:a-feature-agent-guard-standalone
+    image: aktosecurity/guardrails-service:a-feature-agent-guard-standalone-2
     env_file: ./docker-guardrails-service.env
     restart: always
     ports:
