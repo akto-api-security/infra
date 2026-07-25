@@ -11,7 +11,7 @@ version: '2.1'
 
 services:
   anonymizer:
-    image: aktosecurity/akto-agent-guard-anonymizer:a-feature-agent-guard-standalone
+    image: aktosecurity/akto-agent-guard-anonymizer:local
     container_name: agent-guard-anonymizer
     restart: always
     ports:
