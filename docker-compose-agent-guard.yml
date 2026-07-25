@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   executor:
-    image: aktosecurity/akto-agent-guard-worker:a-feature-agent-guard-standalone
+    image: aktosecurity/akto-agent-guard-worker:local
     container_name: agent-guard-executor
     ports:
       - "8080:8090"
