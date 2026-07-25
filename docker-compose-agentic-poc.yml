@@ -83,7 +83,7 @@ services:
         max-file: "3"
 
   guardrails-service-http:
-    image: aktosecurity/guardrails-service:a-feature-agent-guard-standalone
+    image: aktosecurity/guardrails-service:local
     env_file: ./docker-guardrails-service.env
     restart: always
     ports:
@@ -95,7 +95,7 @@ services:
         max-file: "3"
 
   data-ingestion-service:
-    image: aktosecurity/data-ingestion-service:a-feature-agent-guard-standalone
+    image: aktosecurity/data-ingestion-service:latest
     env_file: ./data-ingestion-docker.env
     restart: always
     ports:
