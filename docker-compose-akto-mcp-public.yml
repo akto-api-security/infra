@@ -5,7 +5,7 @@ services:
     container_name: mcp-server
     image: public.ecr.aws/aktosecurity/akto-agentic-testing:mcp_latest
     ports:
-      - "4000:4000"
+      - "8080:4000"
     env_file:
       - ./docker-akto-mcp-public.env
     restart: always
