@@ -1,0 +1,56 @@
+version: '3.8'
+
+# Per-customer mini-testing stack. Spin up one per customer, each with its own
+# CUSTOMER_NAME, all joining the shared network created by common-mini-testing-kafka.yml.
+#
+#   # once, shared:
+#   docker compose -f common-mini-testing-kafka.yml up -d
+#
+#   # per customer (unique project name so stacks don't collide):
+#   docker compose --env-file docker-mini-testing.env -p mini-testing-<customer> \
+#     -f docker-compose-mini-testing.yml up -d
+#
+services:
+  akto-api-security-testing:
+    image:  aktosecurity/mini-testing:latest
+    container_name: ${CUSTOMER_NAME}-akto-api-security-testing
+    networks:
+      - common-mini-testing-net
+    environment:
+      RUNTIME_MODE: hybrid
+      DATABASE_ABSTRACTOR_SERVICE_TOKEN: "<token-here>"
+      PUPPETEER_REPLAY_SERVICE_URL: "http://${CUSTOMER_NAME}-akto-puppeteer-replay:3000"
+      AKTO_LOG_LEVEL: "WARN"
+      MINI_TESTING_NAME: "akto-testing-module"
+      AGENT_BASE_URL: "http://${CUSTOMER_NAME}-agent-testing:5500"
+      NEW_TESTING_ENABLED: "true"
+      AKTO_TOPIC_PREFIX: ${CUSTOMER_NAME}
+      KAFKA_BROKER_URL: "kafka-common-mini-testing:19092"
+      AUTOMATED_AGENT_BASE_URL: "https://agentic-testing.akto.io"
+    restart: always
+    volumes:
+      - ./testing-info:/app/testing-info
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500m"
+        max-file: "2"
+
+  akto-api-security-puppeteer-replay:
+    image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
+    container_name: ${CUSTOMER_NAME}-akto-puppeteer-replay
+    networks:
+      - common-mini-testing-net
+    environment:
+      NODE_ENV: production
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500m"
+        max-file: "2"
+
+networks:
+  common-mini-testing-net:
+    name: common-mini-testing-net
+    external: true

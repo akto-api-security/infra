@@ -1,0 +1,65 @@
+version: '3.8'
+
+# Shared infrastructure for mini-testing (kafka + watchtower).
+# Bring this up FIRST (creates the shared network + kafka), then bring up
+# one docker-compose-common-mini-testing.yml per customer.
+#
+#   docker compose -f docker-compose-common-mini-testing-kafka.yml up -d
+#
+services:
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: true
+      WATCHTOWER_POLL_INTERVAL: 1800
+    networks:
+      - common-mini-testing-net
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  kafka-common-mini-testing:
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:8.2.0-1-ubi9
+    restart: always
+    container_name: kafka-common-mini-testing
+    hostname: kafka-common-mini-testing
+    user: "0"
+    networks:
+      - common-mini-testing-net
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "1"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-common-mini-testing:9094"
+      KAFKA_CLUSTER_ID: "c6a1b8e2-4f2a-4b2a-9c3f-1a2b3c4d5e6f"
+      KAFKA_LISTENERS: "CONTROLLER://0.0.0.0:9094,LISTENER_DOCKER_INTERNAL://0.0.0.0:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://0.0.0.0:29092"
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka-common-mini-testing:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_LOCALHOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+      KAFKA_BROKER_ID: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_CREATE_TOPICS: "akto.api.logs:3:3"
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
+      KAFKA_LOG_RETENTION_HOURS: 5
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+      KAFKA_LOG_CLEANER_ENABLE: "true"
+      KAFKA_CLEANUP_POLICY: "delete"
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+    volumes:
+      - ./data-kafka-data:/var/lib/kafka/data
+      - ./data-kafka-secrets:/etc/kafka/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "2"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+networks:
+  common-mini-testing-net:
+    name: common-mini-testing-net
