@@ -1,0 +1,37 @@
+version: "2.1"
+
+# Host + per-container metrics for the cyborg VM, scraped by the central Prometheus.
+# Kept separate from the app compose. Both endpoints are UNAUTHENTICATED — keep them
+# reachable only inside the VNet.
+#   docker-compose -f docker-compose-monitoring.yml up -d
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: always
+    network_mode: host                 # binds :9100 on the host
+    pid: host
+    mem_limit: 128m
+    volumes:
+      - "/:/host:ro,rslave"
+    command:
+      - "--path.rootfs=/host"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: always
+    ports:
+      - "8081:8080"                     # host 8081 -> cadvisor 8080 (8080 kept free)
+    mem_limit: 256m
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    # If cadvisor errors on cgroups access, uncomment:
+    # privileged: true
