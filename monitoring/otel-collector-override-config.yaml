@@ -1,5 +1,5 @@
 # Generic local override, merged on top of otel-collector-base-config.yaml at
-# runtime by otel-collector-setup.sh (see CONFIG_OVERRIDE_FILE), e.g.:
+# runtime by otel-collector-setup.sh (see OVERRIDE_FILE), e.g.:
 #   otelcol-contrib --config=https://.../otel-collector-base-config.yaml --config=file:/etc/otelcol-contrib/override.yaml
 #
 # Use this for anything that shouldn't live in the shared base config -
