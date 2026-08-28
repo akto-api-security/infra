@@ -53,8 +53,6 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-producer.env
     environment:
-      PROMETHEUS_METRICS_ENABLED: "true"
-      METRICS_AUTH_ENABLED: "true"
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
       SERVICE_NAME: "cyborg-producer"
     restart: always
@@ -73,8 +71,6 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
     environment:
-      PROMETHEUS_METRICS_ENABLED: "true"
-      METRICS_AUTH_ENABLED: "true"
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
       SERVICE_NAME: "cyborg-consumer"
     ports:
@@ -94,8 +90,6 @@ services:
     env_file: ./docker-writes-consumer.env
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
-      PROMETHEUS_METRICS_ENABLED: "true"
-      METRICS_AUTH_ENABLED: "true"
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
       SERVICE_NAME: "cyborg-consumer-acct-1736798101"
     ports:
@@ -114,8 +108,6 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer-traffic.env
     environment:
-      PROMETHEUS_METRICS_ENABLED: "true"
-      METRICS_AUTH_ENABLED: "true"
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
       SERVICE_NAME: "cyborg-traffic-consumer"
     ports:
