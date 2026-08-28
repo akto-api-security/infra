@@ -3,7 +3,7 @@ version: "2.1"
 # Host + per-container metrics for the cyborg VM, scraped by the central Prometheus.
 # Kept separate from the app compose. Both endpoints are UNAUTHENTICATED — keep them
 # reachable only inside the VNet.
-#   docker-compose -f docker-compose-monitoring.yml up -d
+#   cd akto-monitoring && docker-compose up -d
 
 services:
   node-exporter:
