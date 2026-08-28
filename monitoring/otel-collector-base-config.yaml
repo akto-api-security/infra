@@ -1,0 +1,42 @@
+# Shared base config, meant to be hosted at a stable URL and loaded via:
+#   otelcol-contrib --config=https://<host>/otel-collector-base-config.yaml --config=env:OTEL_AUTH_HEADER
+#
+# Deliberately excludes secrets (e.g. the OTLP auth header) - those get merged
+# in separately at runtime from an env var sourced from Key Vault, so this
+# file can live somewhere without strict access control.
+
+receivers:
+  hostmetrics:
+    collection_interval: 15s
+    # Only set on the Docker playground (bind-mounts host / to /hostfs);
+    # defaults to / for a real VM where the collector runs on the host OS.
+    root_path: ${env:HOSTMETRICS_ROOT_PATH:-/}
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+      load:
+      memory:
+      network:
+      paging:
+      processes:
+
+processors:
+  batch:
+  resourcedetection:
+    detectors: [env, azure, system]
+    system:
+      hostname_sources: [os]
+
+exporters:
+  otlp:
+    endpoint: ${env:OTEL_EXPORTER_ENDPOINT}
+    tls:
+      insecure: false
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [resourcedetection, batch]
+      exporters: [otlp]
