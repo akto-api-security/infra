@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart otelcol-contrib to pick up latest config
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart otelcol-contrib.service

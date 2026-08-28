@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenTelemetry Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/otelcol-contrib --config=https://raw.githubusercontent.com/akto-api-security/infra/feature/vm-monitoring/monitoring/otel-collector-base-config.yaml --config=file:/etc/otelcol-contrib/override.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

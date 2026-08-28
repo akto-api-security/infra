@@ -1,0 +1,16 @@
+# Generic local override, merged on top of otel-collector-base-config.yaml at
+# runtime by otel-collector-setup.sh (see CONFIG_OVERRIDE_FILE), e.g.:
+#   otelcol-contrib --config=https://.../otel-collector-base-config.yaml --config=file:/etc/otelcol-contrib/override.yaml
+#
+# Use this for anything that shouldn't live in the shared base config -
+# secrets, endpoints, per-VM/per-fleet tags, temporary debug settings, etc.
+# Never commit real values here; the examples below (endpoint, OTLP auth
+# header) should be written to this path with real values at VM boot -
+# endpoint from wherever your deployment config lives, the auth header
+# sourced from Key Vault via managed identity.
+
+exporters:
+  otlphttp:
+    endpoint: "<REPLACE_WITH_GATEWAY_URL>"
+    headers:
+      Authorization: "Bearer <REPLACE_WITH_TOKEN_FROM_KEY_VAULT>"

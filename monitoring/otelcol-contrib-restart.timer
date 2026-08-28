@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly trigger to restart otelcol-contrib
+
+[Timer]
+OnUnitActiveSec=1h
+OnBootSec=1h
+
+[Install]
+WantedBy=timers.target
