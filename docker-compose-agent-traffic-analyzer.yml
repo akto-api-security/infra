@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  agent-traffic-api:
+    image: aktosecurity/agent-traffic-analyzer:local
+    container_name: akto-agent-traffic-api
+    env_file: ./docker-agent-traffic-analyzer.env
+    ports:
+      - "8093:8093"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - chroma_db:/app/chroma_db
+      - ./chroma_db:/app/chroma_db  # Mount local chroma_db for persistence
+      - model-cache:/app/.cache/huggingface  # Persist HuggingFace model cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  agent-traffic-consumer:
+    image: aktosecurity/agent-traffic-analyzer:local
+    container_name: akto-agent-traffic-consumer
+    env_file: ./docker-agent-traffic-analyzer.env
+    environment:
+      - SERVICE_MODE=consumer
+      - KAFKA_GROUP_ID=agent-traffic-embedding-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      agent-traffic-api:
+        condition: service_healthy
+    volumes:
+      - chroma_db:/app/chroma_db
+      - ./chroma_db:/app/chroma_db  # Mount local chroma_db for persistence
+      - model-cache:/app/.cache/huggingface  # Persist HuggingFace model cache
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: akto-kafka-broker
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: akto-kafka-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  chroma_db:
+    driver: local
+  model-cache:
+    driver: local
+

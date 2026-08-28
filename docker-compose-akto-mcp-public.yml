@@ -1,0 +1,20 @@
+version: '2.1'
+
+services:
+  mcp-server:
+    container_name: mcp-server
+    image: public.ecr.aws/aktosecurity/akto-agentic-testing:mcp_latest
+    ports:
+      - "8080:4000"
+    env_file:
+      - ./docker-akto-mcp-public.env
+    restart: always
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: ./watchtower.env
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"

@@ -198,7 +198,11 @@ fi
 
 
 log_step 'updating Akto!'
-$MAYBE_SUDO docker-compose pull
+while true; do
+  $MAYBE_SUDO docker-compose pull && break
+  echo "Pull failed (likely rate limited). Retrying in 30 seconds..."
+  sleep 30
+done
 
 log_step "running Akto! ${WHITE}${BOLD}This can take up to 5 minutes${NORMAL}"
 

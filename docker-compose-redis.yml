@@ -1,0 +1,41 @@
+# Dedicated Redis instance for the Agent Guard semantic cache.
+#
+# Deploy this on its OWN host/instance. The agent-guard stack
+# (docker-compose-agent-guard.yml) reaches it over the network via REDIS_URL
+# (set in docker-compose-agent-guard.env), e.g.
+#   REDIS_URL=redis://:<password>@<this-host>:6379
+#
+# Must be redis-stack-server (not plain redis): the vector cache needs the
+# RediSearch module (FT.* commands).
+#
+# Auth: REDIS_PASSWORD is REQUIRED — set it in the environment or a `.env` beside
+# this file before `docker-compose -f docker-compose-redis.yml up -d`. On GCP the
+# startup-script fetches it from Secret Manager and writes it to ~/akto/infra/.env.
+# Also restrict access at the firewall/security-group to the agent-guard host(s).
+
+# NB: keep this on the v2.1 schema and use only plain ${VAR} interpolation — the
+# GCP cf-deploy flow installs docker-compose 1.17.0, which misparses a file with
+# no version: key and rejects extended forms like ${VAR:-}/${VAR:?}/${VAR:+}.
+version: '2.1'
+
+services:
+  redis:
+    image: redis/redis-stack-server:7.4.0-v1
+    container_name: agent-guard-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    environment:
+      # AOF persistence so the warmed cache survives restarts. REDIS_PASSWORD must
+      # be set in the environment / ~/akto/infra/.env (plain ${VAR}: see note above).
+      REDIS_ARGS: "--appendonly yes --requirepass ${REDIS_PASSWORD}"
+    volumes:
+      - agent-guard-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  agent-guard-redis-data:

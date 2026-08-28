@@ -1,0 +1,110 @@
+version: '2.1'
+
+services:
+  kafka1:
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:8.2.0-1-ubi9
+    restart: always
+    hostname: kafka1
+    user: "0"
+    ports:
+      - "9092:9092"
+      - "19092:19092"
+      - "29092:29092"
+      - "9999:9999"
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "1"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:9094"
+      KAFKA_CLUSTER_ID: "c6a1b8e2-4f2a-4b2a-9c3f-1a2b3c4d5e6f"
+      KAFKA_LISTENERS: "CONTROLLER://0.0.0.0:9094,LISTENER_DOCKER_EXTERNAL_DIFFHOST://0.0.0.0:9092,LISTENER_DOCKER_INTERNAL://0.0.0.0:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://0.0.0.0:29092"
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_EXTERNAL_DIFFHOST://${AKTO_KAFKA_IP}:9092, LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL_LOCALHOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_DIFFHOST:PLAINTEXT,LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL_LOCALHOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+      KAFKA_BROKER_ID: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_CREATE_TOPICS: "akto.api.logs:3:3"
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
+      KAFKA_LOG_RETENTION_HOURS: 5
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+      KAFKA_LOG_CLEANER_ENABLE: "true"
+      KAFKA_CLEANUP_POLICY: "delete"
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+    volumes:
+      - ./data-kafka-data:/var/lib/kafka/data
+      - ./data-kafka-secrets:/etc/kafka/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "2"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  akto-api-security-runtime:
+    image: public.ecr.aws/aktosecurity/akto-api-security-mini-runtime:latest
+    env_file: ./docker-mini-runtime.env
+    mem_limit: 8g 
+    restart: always
+    depends_on:
+      - kafka1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"
+
+  account-job-executor:
+    image: aktosecurity/akto-account-job-executor:latest
+    env_file: ./docker-account-job-executor.env
+    restart: always
+    depends_on:
+      - data-ingestion-service
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  guardrails-service:
+    image: aktosecurity/guardrails-service:local
+    env_file: ./docker-guardrails-service-kafka.env
+    restart: always
+    ports:
+      - "127.0.0.1:9090:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"
+
+  guardrails-service-http:
+    image: aktosecurity/guardrails-service:local
+    env_file: ./docker-guardrails-service.env
+    restart: always
+    ports:
+      - "9091:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"
+
+  data-ingestion-service:
+    image: aktosecurity/data-ingestion-service:latest
+    env_file: ./data-ingestion-docker.env
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka1
+    mem_limit: 8g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"

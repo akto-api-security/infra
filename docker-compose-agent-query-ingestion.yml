@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   zoo1:
-    image: public.ecr.aws/aktosecurity/confluentinc-cp-zookeeper:7.9.4-1-ubi8
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-zookeeper:7.9.2-1-ubi8
     restart: on-failure:10
     hostname: zoo1
     user: "0"  
@@ -19,7 +19,7 @@ services:
       ZOOKEEPER_SERVERS: zoo1:2888:3888
 
   kafka1:
-    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:7.9.4-1-ubi8
+    image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:7.9.2-1-ubi8
     restart: on-failure:10
     hostname: kafka1
     user: "0"
@@ -37,7 +37,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_CREATE_TOPICS: "akto.api.logs:3:3"
+      KAFKA_CREATE_TOPICS: "akto.trafficdata:3:3"
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
       KAFKA_LOG_RETENTION_HOURS: 5
       KAFKA_LOG_SEGMENT_BYTES: 104857600
@@ -49,55 +49,30 @@ services:
       - ./data-kafka-secrets:/etc/kafka/secrets             
     depends_on:
       - zoo1
-
-  akto-api-security-testing-1:
-    image: aktosecurity/akto-api-testing:local
-    env_file: ./docker-testing.env
+  akto-api-security-writes-producer:
+    image: aktosecurity/akto-api-security-database-abstractor:kafkalatest
+    env_file: ./docker-writes-producer.env
     restart: always
-    cpu_quota: 180000
+    mem_limit: 13g
+    ports: 
+      - "9001:8080"
     depends_on:
       - kafka1
-    volumes:
-      - ./current-testing-state/files:/app/testing-info
     logging:
       driver: "json-file"
       options:
-        max-size: "300m"
-        max-file: "2"
+        max-size: "1g"
+        max-file: "3"
 
-  akto-puppeteer-replay:
-    image: aktosecurity/akto-puppeteer-replay:latest
-    ports:
-      - "3000:3000"
+  akto-api-security-writes-consumer:
+    image: aktosecurity/akto-api-security-database-abstractor:kafkalatest
+    env_file: ./docker-writes-consumer.env
     restart: always
-    mem_limit: 3300m
-
-  watchtower:
-    image: containrrr/watchtower
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    env_file: ./watchtower.env
-    mem_limit: 200m
-    labels:
-      com.centurylinklabs.watchtower.enable: "false"
-
-  akto-hello-world:
-    image: public.ecr.aws/aktosecurity/hello-world-server:latest
-    restart: always
-    ports: 
-      - "8000:8000"
+    mem_limit: 4g
+    depends_on:
+      - kafka1
     logging:
       driver: "json-file"
       options:
-        max-size: "200m"
-        max-file: "2"
-
-  agent-testing:
-    container_name: agent-testing
-    image: public.ecr.aws/aktosecurity/akto-agentic-testing:latest
-    ports:
-      - "5500:5500"
-    env_file:
-      - ./docker-agentic-testing.env
-    restart: always
+        max-size: "1g"
+        max-file: "3"

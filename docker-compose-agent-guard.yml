@@ -1,0 +1,21 @@
+version: '2.1'
+
+services:
+  executor:
+    image: aktosecurity/akto-agent-guard-worker:local
+    container_name: agent-guard-executor
+    ports:
+      - "8080:8090"
+    env_file:
+      - ./docker-compose-agent-guard.env
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"

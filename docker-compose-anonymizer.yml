@@ -1,0 +1,32 @@
+# Dedicated anonymizer for the Agent Guard worker.
+#
+# Deploy this on its OWN host/instance. The agent-guard stack
+# (docker-compose-agent-guard.yml) reaches it over the network via ANONYMIZER_URL
+# (set in docker-compose-agent-guard.env), e.g.
+#   ANONYMIZER_URL=http://<this-host>:8080
+#
+# Also restrict access at the firewall/security-group to the agent-guard host(s).
+
+version: '2.1'
+
+services:
+  anonymizer:
+    image: aktosecurity/akto-agent-guard-anonymizer:local
+    container_name: agent-guard-anonymizer
+    restart: always
+    ports:
+      - "8080:8093"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8093
+      - ANONYMIZER_WORKERS=2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "2"
