@@ -54,7 +54,7 @@ services:
     env_file: ./docker-writes-producer.env
     environment:
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
-      SERVICE_NAME: "cyborg-producer"
+      APP_NAME: "api-service"
     restart: always
     mem_limit: 13g
     ports:
@@ -72,7 +72,7 @@ services:
     env_file: ./docker-writes-consumer.env
     environment:
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
-      SERVICE_NAME: "cyborg-consumer"
+      APP_NAME: "consumer"
     ports:
       - "9002:8080"
     restart: always
@@ -91,7 +91,7 @@ services:
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
-      SERVICE_NAME: "cyborg-consumer-acct-1736798101"
+      APP_NAME: "consumer-acct"
     ports:
       - "9004:8080"
     restart: always
@@ -109,7 +109,7 @@ services:
     env_file: ./docker-writes-consumer-traffic.env
     environment:
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
-      SERVICE_NAME: "cyborg-traffic-consumer"
+      APP_NAME: "traffic"
     ports:
       - "9003:8080"
     restart: always
