@@ -53,7 +53,7 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-producer.env
     environment:
-      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-c83803a9608f90ca674931ad86a07958b478b132eb5fa799e9487063ce867bb5}
       APP_NAME: "api-service"
     restart: always
     mem_limit: 13g
@@ -71,7 +71,7 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
     environment:
-      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-c83803a9608f90ca674931ad86a07958b478b132eb5fa799e9487063ce867bb5}
       APP_NAME: "consumer"
     ports:
       - "9002:8080"
@@ -90,7 +90,7 @@ services:
     env_file: ./docker-writes-consumer.env
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
-      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-c83803a9608f90ca674931ad86a07958b478b132eb5fa799e9487063ce867bb5}
       APP_NAME: "consumer-account-specific"
     ports:
       - "9004:8080"
@@ -108,7 +108,7 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer-traffic.env
     environment:
-      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-c83803a9608f90ca674931ad86a07958b478b132eb5fa799e9487063ce867bb5}
       APP_NAME: "consumer-traffic"
     ports:
       - "9003:8080"
