@@ -77,6 +77,8 @@ services:
     container_name: cyborg-consumer
     environment:
       APP_NAME: "consumer"
+    ports:
+      - "9002:8080"
     restart: always
     mem_limit: 4g
     depends_on:
@@ -93,6 +95,8 @@ services:
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
       APP_NAME: "consumer-account-specific"
+    ports:
+      - "9004:8080"
     restart: always
     mem_limit: 4g
     depends_on:
@@ -108,6 +112,8 @@ services:
     env_file: ./docker-writes-consumer-traffic.env
     environment:
       APP_NAME: "consumer-traffic"
+    ports:
+      - "9003:8080"
     restart: always
     mem_limit: 4g
     depends_on:
