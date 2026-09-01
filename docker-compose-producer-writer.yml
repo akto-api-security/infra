@@ -91,7 +91,7 @@ services:
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN}
-      APP_NAME: "consumer-account"
+      APP_NAME: "consumer-account-specific"
     ports:
       - "9004:8080"
     restart: always
