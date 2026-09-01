@@ -53,6 +53,8 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-producer.env
     container_name: cyborg-producer
+    environment:
+      APP_NAME: "api-service"
     restart: always
     mem_limit: 13g
     ports:
@@ -73,6 +75,8 @@ services:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer.env
     container_name: cyborg-consumer
+    environment:
+      APP_NAME: "consumer"
     restart: always
     mem_limit: 4g
     depends_on:
@@ -88,6 +92,7 @@ services:
     env_file: ./docker-writes-consumer.env
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
+      APP_NAME: "consumer-account-specific"
     restart: always
     mem_limit: 4g
     depends_on:
@@ -101,6 +106,8 @@ services:
   akto-api-security-writes-consumer-traffic:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
     env_file: ./docker-writes-consumer-traffic.env
+    environment:
+      APP_NAME: "consumer-traffic"
     restart: always
     mem_limit: 4g
     depends_on:
