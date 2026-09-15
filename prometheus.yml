@@ -12,16 +12,3 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ['prometheus-pushgateway:9091']
-
-  # Dashboard app metrics. /metrics is Bearer-gated by METRICS_AUTH_TOKEN on the
-  # dashboard side; credentials here must match that token. The dashboard runs in a
-  # separate compose project and publishes :8080 on the host, so it is reached via
-  # host.docker.internal (see extra_hosts on the prometheus service).
-  - job_name: 'akto-dashboard'
-    metrics_path: /metrics
-    scheme: http
-    authorization:
-      type: Bearer
-      credentials: local-dashboard-metrics-token
-    static_configs:
-      - targets: ['host.docker.internal:8080']
