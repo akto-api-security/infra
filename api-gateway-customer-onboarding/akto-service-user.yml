@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a dedicated IAM service user for ONE customer's API Gateway
+  connector instance, used as its base identity when it can't get AWS
+  credentials natively (e.g. when the connector runs outside AWS, such as
+  on Azure). This user can only assume that customer's specific
+  cross-account role(s) — the RoleArn(s) output by running
+  akto-cross-account-role.yml once per AWS account the customer has —
+  nothing else, and no other customer's role. Deploy one instance of this
+  stack per customer, listing every AWS account's role ARN that customer
+  has. This template does NOT create an access key; generate one manually
+  after the stack completes so the secret never passes through
+  CloudFormation's stack outputs or event history.
+
+Parameters:
+  CustomerName:
+    Type: String
+    Description: >
+      Short identifier for the customer this user is dedicated to (e.g.
+      their account name or ID). Used to name and tag the user so it's
+      identifiable in IAM and CloudTrail.
+    AllowedPattern: '^[\w+=,.@-]+$'
+  CustomerRoleArns:
+    Type: CommaDelimitedList
+    Description: >
+      Comma-separated list of RoleArn(s) output by akto-cross-account-role
+      stacks run in this customer's AWS account(s) — one entry per account
+      if the customer has more than one. This user will be able to assume
+      exactly these ARNs and no others.
+  SourceIpCidr:
+    Type: String
+    Default: ''
+    Description: >
+      Optional CIDR (e.g. a stable NAT gateway egress IP/32) to restrict
+      where this user's credentials can be used from. Leave blank to skip
+      this restriction.
+
+Conditions:
+  HasSourceIpRestriction: !Not [!Equals [!Ref SourceIpCidr, '']]
+
+Resources:
+  AktoConnectorBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: !Sub >-
+        Caps what the Akto connector service user for ${CustomerName} can
+        ever do, regardless of what's later attached to it directly.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AssumeThisCustomersConnectorRole
+            Effect: Allow
+            Action: sts:AssumeRole
+            Resource: !Ref CustomerRoleArns
+            Condition: !If
+              - HasSourceIpRestriction
+              - IpAddress:
+                  aws:SourceIp: !Ref SourceIpCidr
+              - !Ref 'AWS::NoValue'
+
+  AktoConnectorServiceUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub '${CustomerName}'
+      Path: /customers/
+      PermissionsBoundary: !Ref AktoConnectorBoundary
+      Tags:
+        - Key: Customer
+          Value: !Ref CustomerName
+      Policies:
+        - PolicyName: AssumeThisCustomersConnectorRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AssumeThisCustomersConnectorRole
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Ref CustomerRoleArns
+                Condition: !If
+                  - HasSourceIpRestriction
+                  - IpAddress:
+                      aws:SourceIp: !Ref SourceIpCidr
+                  - !Ref 'AWS::NoValue'
+
+Outputs:
+  UserName:
+    Description: >
+      IAM user name. Run the following once, then store the resulting
+      secret in your secrets vault (e.g. Azure Key Vault) — do not put it
+      in CloudFormation:
+      aws iam create-access-key --user-name <this value>
+    Value: !Ref AktoConnectorServiceUser
+  UserArn:
+    Description: ARN of the created user.
+    Value: !GetAtt AktoConnectorServiceUser.Arn

@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Sets up everything Akto needs to connect to this AWS account's API Gateway:
+  (1) ensures the account-level API Gateway CloudWatch Logs role exists,
+  creating one only if the account doesn't already have one configured,
+  (2) enables execution logging (INFO + data trace) on every stage of the
+  given REST API(s) — or every REST API in the account if none are specified
+  — and (3) creates a cross-account IAM role that Akto's dedicated connector
+  instance for this customer can assume to read those logs and discover API
+  specs. This deployment of Akto's connector is dedicated to a single
+  customer account, so no ExternalId is used.
+
+Parameters:
+  AktoAWSAccountId:
+    Type: String
+    Description: >
+      AWS Account ID where Akto's connector instance for this customer runs.
+    AllowedPattern: '^\d{12}$'
+  RoleName:
+    Type: String
+    Default: AktoApiGatewayLoggingRole
+    Description: Name of the IAM role Akto will assume.
+  RestApiIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: >
+      Comma-separated list of REST API IDs to enable logging on, covering
+      every stage of each one. Leave blank to enable logging on every REST
+      API in this account/region.
+  Version:
+    Type: String
+    Default: '1.0.0'
+    Description: >
+      Bump this (any value change works) and run an update-stack to force
+      the logging-enablement Lambda to re-run — e.g. after adding a new API
+      or stage that should be picked up. It has no effect on its own;
+      CloudFormation only re-invokes the Lambda when a property it's given
+      actually changes.
+
+Resources:
+  # ---------------------------------------------------------------------
+  # 1. Cross-account role Akto's connector assumes to read logs / specs
+  # ---------------------------------------------------------------------
+  AktoCrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Path: /akto/
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AktoAWSAccountId}:root'
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      Policies:
+        - PolicyName: AktoApiGatewayLogReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadCloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+              - Sid: DiscoverApiGatewaySpecs
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource:
+                  - !Sub 'arn:aws:apigateway:*::/restapis'
+                  - !Sub 'arn:aws:apigateway:*::/restapis/*'
+                  - !Sub 'arn:aws:apigateway:*::/apis'
+                  - !Sub 'arn:aws:apigateway:*::/apis/*'
+
+  # ---------------------------------------------------------------------
+  # 2. Custom resource: ensures the account-level API Gateway CloudWatch
+  #    Logs role exists (creating one only if missing, never overwriting
+  #    an existing one), discovers target REST APIs (or all of them, if
+  #    RestApiIds is empty), and enables execution logging on every stage
+  #    of each. Done in Lambda rather than as static CFN resources because
+  #    the set of REST APIs/stages isn't known until deploy time, and
+  #    because these stages already exist outside CloudFormation.
+  # ---------------------------------------------------------------------
+  EnableStageLoggingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EnableStageLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*'
+              - Effect: Allow
+                Action:
+                  - apigateway:GET
+                  - apigateway:PATCH
+                Resource:
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/*'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/account'
+              - Sid: ManageAccountCloudWatchRole
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/AktoApiGatewayCloudWatchRole'
+              - Sid: PassAccountCloudWatchRoleToApiGateway
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/AktoApiGatewayCloudWatchRole'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: apigateway.amazonaws.com
+
+  EnableStageLoggingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt EnableStageLoggingFunctionRole.Arn
+      Timeout: 120
+      Code:
+        ZipFile: |
+          import json
+          import time
+          import urllib.request
+          import boto3
+
+          ACCOUNT_CLOUDWATCH_ROLE_NAME = "AktoApiGatewayCloudWatchRole"
+
+          def send(event, context, status, reason="", data=None):
+              body = json.dumps({
+                  "Status": status,
+                  "Reason": reason or "See CloudWatch Logs",
+                  "PhysicalResourceId": event.get("PhysicalResourceId") or event["LogicalResourceId"],
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+                  "Data": data or {},
+              }).encode()
+              req = urllib.request.Request(event["ResponseURL"], data=body, method="PUT")
+              req.add_header("content-type", "")
+              req.add_header("content-length", str(len(body)))
+              urllib.request.urlopen(req)
+
+          def list_target_api_ids(client, requested_ids):
+              if requested_ids:
+                  return requested_ids
+              api_ids = []
+              paginator = client.get_paginator("get_rest_apis")
+              for page in paginator.paginate():
+                  api_ids.extend(item["id"] for item in page["items"])
+              return api_ids
+
+          def ensure_account_cloudwatch_role(apigw, iam_client):
+              existing_arn = apigw.get_account().get("cloudwatchRoleArn")
+              if existing_arn:
+                  return existing_arn, False
+
+              trust_policy = json.dumps({
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                      "Effect": "Allow",
+                      "Principal": {"Service": "apigateway.amazonaws.com"},
+                      "Action": "sts:AssumeRole",
+                  }],
+              })
+              try:
+                  role = iam_client.create_role(
+                      RoleName=ACCOUNT_CLOUDWATCH_ROLE_NAME,
+                      AssumeRolePolicyDocument=trust_policy,
+                  )["Role"]
+              except iam_client.exceptions.EntityAlreadyExistsException:
+                  role = iam_client.get_role(RoleName=ACCOUNT_CLOUDWATCH_ROLE_NAME)["Role"]
+
+              iam_client.attach_role_policy(
+                  RoleName=ACCOUNT_CLOUDWATCH_ROLE_NAME,
+                  PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+              )
+              return role["Arn"], True
+
+          def retry(fn, attempts=6, delay_seconds=5):
+              last_error = None
+              for _ in range(attempts):
+                  try:
+                      return fn()
+                  except Exception as e:
+                      last_error = e
+                      time.sleep(delay_seconds)
+              raise last_error
+
+          def handler(event, context):
+              try:
+                  props = event["ResourceProperties"]
+                  requested_ids = [i for i in props.get("RestApiIds", []) if i]
+                  apigw = boto3.client("apigateway")
+                  iam_client = boto3.client("iam")
+
+                  if event["RequestType"] in ("Create", "Update"):
+                      role_arn, just_created = ensure_account_cloudwatch_role(apigw, iam_client)
+                      if just_created:
+                          retry(lambda: apigw.update_account(
+                              patchOperations=[
+                                  {"op": "replace", "path": "/cloudwatchRoleArn", "value": role_arn},
+                              ],
+                          ))
+
+                      api_ids = list_target_api_ids(apigw, requested_ids)
+                      for api_id in api_ids:
+                          stages = apigw.get_stages(restApiId=api_id)["item"]
+                          for stage in stages:
+                              stage_name = stage["stageName"]
+                              update = lambda api_id=api_id, stage_name=stage_name: apigw.update_stage(
+                                  restApiId=api_id,
+                                  stageName=stage_name,
+                                  patchOperations=[
+                                      {"op": "replace", "path": "/*/*/logging/loglevel", "value": "INFO"},
+                                      {"op": "replace", "path": "/*/*/logging/dataTrace", "value": "true"},
+                                  ],
+                              )
+                              retry(update) if just_created else update()
+                  # On Delete, intentionally leave logging settings (and the
+                  # account CloudWatch role, if we created one) in place —
+                  # removing the stack shouldn't silently turn off a
+                  # customer's API Gateway logging.
+                  send(event, context, "SUCCESS")
+              except Exception as e:
+                  send(event, context, "FAILED", str(e))
+
+  EnableStageLogging:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt EnableStageLoggingFunction.Arn
+      RestApiIds: !Ref RestApiIds
+      Version: !Ref Version
+
+Outputs:
+  RoleArn:
+    Description: Paste this ARN into the Akto dashboard to complete the connection.
+    Value: !GetAtt AktoCrossAccountRole.Arn
