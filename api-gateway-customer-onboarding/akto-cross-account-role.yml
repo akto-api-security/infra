@@ -247,28 +247,34 @@ Resources:
                       print("enabling logging on %d REST API(s): %s" % (len(api_ids), ", ".join(api_ids)))
                       skipped = []
                       for api_id in api_ids:
-                          # One bad API must not stop the rest from being set up.
+                          # An unreadable API must not stop the rest.
                           try:
                               stages = apigw.get_stages(restApiId=api_id)["item"]
-                              if not stages:
-                                  print("%s has no stages, nothing to enable" % api_id)
-                              for stage in stages:
-                                  stage_name = stage["stageName"]
-                                  update = lambda api_id=api_id, stage_name=stage_name: apigw.update_stage(
-                                      restApiId=api_id,
-                                      stageName=stage_name,
-                                      patchOperations=[
-                                          {"op": "replace", "path": "/*/*/logging/loglevel", "value": "INFO"},
-                                          {"op": "replace", "path": "/*/*/logging/dataTrace", "value": "true"},
-                                      ],
-                                  )
-                                  retry(update) if just_created else update()
-                                  print("enabled logging on %s/%s" % (api_id, stage_name))
                           except Exception as e:
                               print("skipping %s: %s" % (api_id, e))
                               skipped.append(api_id)
+                              continue
+                          if not stages:
+                              print("%s has no stages, nothing to enable" % api_id)
+                          for stage in stages:
+                              stage_name = stage["stageName"]
+                              update = lambda api_id=api_id, stage_name=stage_name: apigw.update_stage(
+                                  restApiId=api_id,
+                                  stageName=stage_name,
+                                  patchOperations=[
+                                      {"op": "replace", "path": "/*/*/logging/loglevel", "value": "INFO"},
+                                      {"op": "replace", "path": "/*/*/logging/dataTrace", "value": "true"},
+                                  ],
+                              )
+                              # One failed stage must not cost its siblings.
+                              try:
+                                  retry(update) if just_created else update()
+                                  print("enabled logging on %s/%s" % (api_id, stage_name))
+                              except Exception as e:
+                                  print("skipping %s/%s: %s" % (api_id, stage_name, e))
+                                  skipped.append("%s/%s" % (api_id, stage_name))
                       if skipped:
-                          print("skipped %d of %d API(s): %s" % (len(skipped), len(api_ids), ", ".join(skipped)))
+                          print("skipped %d: %s" % (len(skipped), ", ".join(skipped)))
               except Exception as e:
                   print("ERROR: %s" % e)
                   status, reason = "FAILED", str(e)
