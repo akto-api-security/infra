@@ -16,10 +16,17 @@ Parameters:
     Description: >
       AWS Account ID where Akto's connector instance for this customer runs.
     AllowedPattern: '^\d{12}$'
-  RoleName:
+  CreateCrossAccountRole:
     Type: String
-    Default: AktoApiGatewayLoggingRole
-    Description: Name of the IAM role Akto will assume.
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Leave as true. IAM roles are global, so set this to false only when
+      deploying this stack to an additional region of an AWS account where
+      it has already been deployed — the role created by the first
+      deployment is reused instead of being recreated. 
+      Setting this to false on a first deployment
+      means no role is created and Akto will not be able to connect.
   RestApiIds:
     Type: CommaDelimitedList
     Default: ''
@@ -37,14 +44,21 @@ Parameters:
       CloudFormation only re-invokes the Lambda when a property it's given
       actually changes.
 
+Conditions:
+  ShouldCreateCrossAccountRole: !Equals [!Ref CreateCrossAccountRole, 'true']
+
 Resources:
   # ---------------------------------------------------------------------
-  # 1. Cross-account role Akto's connector assumes to read logs / specs
+  # 1. Cross-account role Akto's connector assumes to read logs / specs.
+  #    IAM is global and this role's permissions already cover every
+  #    region, so one role serves the whole account. Additional regions
+  #    reuse it by deploying with CreateCrossAccountRole=false.
   # ---------------------------------------------------------------------
   AktoCrossAccountRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateCrossAccountRole
     Properties:
-      RoleName: !Ref RoleName
+      RoleName: AktoApiGatewayLoggingRole
       Path: /akto/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -53,7 +67,6 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AktoAWSAccountId}:root'
             Action: sts:AssumeRole
-      MaxSessionDuration: 3600
       Policies:
         - PolicyName: AktoApiGatewayLogReadOnly
           PolicyDocument:
@@ -290,4 +303,7 @@ Resources:
 Outputs:
   RoleArn:
     Description: Paste this ARN into the Akto dashboard to complete the connection.
-    Value: !GetAtt AktoCrossAccountRole.Arn
+    Value: !If
+      - ShouldCreateCrossAccountRole
+      - !GetAtt AktoCrossAccountRole.Arn
+      - !Sub 'arn:aws:iam::${AWS::AccountId}:role/akto/AktoApiGatewayLoggingRole'
