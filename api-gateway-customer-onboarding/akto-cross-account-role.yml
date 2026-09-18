@@ -5,10 +5,9 @@ Description: >
   creating one only if the account doesn't already have one configured,
   (2) enables execution logging (INFO + data trace) on every stage of the
   given REST API(s) — or every REST API in the region if none are specified
-  — and (3) creates a cross-account IAM role that Akto's dedicated connector
-  instance for this customer can assume to read those logs and discover API
-  specs. This deployment of Akto's connector is dedicated to a single
-  customer account, so no ExternalId is used.
+  — and (3) creates a cross-account IAM role, scoped to this region, that
+  Akto's connector can assume to read those logs and discover API specs.
+  The role can only be assumed when Akto presents the agreed ExternalId.
 
 Parameters:
   AktoAWSAccountId:
@@ -16,17 +15,14 @@ Parameters:
     Description: >
       AWS Account ID where Akto's connector instance for this customer runs.
     AllowedPattern: '^\d{12}$'
-  CreateCrossAccountRole:
+  ExternalId:
     Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
+    NoEcho: true
+    MinLength: 16
     Description: >
-      Leave as true. IAM roles are global, so set this to false only when
-      deploying this stack to an additional region of an AWS account where
-      it has already been deployed — the role created by the first
-      deployment is reused instead of being recreated. 
-      Setting this to false on a first deployment
-      means no role is created and Akto will not be able to connect.
+      Unique value issued by Akto for this account. Akto must present it on
+      every AssumeRole call, so knowing the account ID and role name alone
+      is not enough to assume this role. Do not reuse or publish it.
   RestApiIds:
     Type: CommaDelimitedList
     Default: ''
@@ -44,21 +40,17 @@ Parameters:
       CloudFormation only re-invokes the Lambda when a property it's given
       actually changes.
 
-Conditions:
-  ShouldCreateCrossAccountRole: !Equals [!Ref CreateCrossAccountRole, 'true']
-
 Resources:
   # ---------------------------------------------------------------------
-  # 1. Cross-account role Akto's connector assumes to read logs / specs.
-  #    IAM is global and this role's permissions already cover every
-  #    region, so one role serves the whole account. Additional regions
-  #    reuse it by deploying with CreateCrossAccountRole=false.
+  # 1. Cross-account role Akto's connector assumes to read logs / specs
   # ---------------------------------------------------------------------
   AktoCrossAccountRole:
     Type: AWS::IAM::Role
-    Condition: ShouldCreateCrossAccountRole
     Properties:
-      RoleName: AktoApiGatewayLoggingRole
+      # Region-suffixed so the name matches the scope of its permissions,
+      # and so deploying to another region of the same account does not
+      # clash on this globally-unique name.
+      RoleName: !Sub 'AktoApiGatewayLoggingRole-${AWS::Region}'
       Path: /akto/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -67,28 +59,36 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AktoAWSAccountId}:root'
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
       Policies:
         - PolicyName: AktoApiGatewayLogReadOnly
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: ReadCloudWatchLogs
+              - Sid: ListLogGroups
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+              - Sid: ReadApiGatewayExecutionLogs
                 Effect: Allow
                 Action:
-                  - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
-                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*:*'
               - Sid: DiscoverApiGatewaySpecs
                 Effect: Allow
                 Action:
                   - apigateway:GET
                 Resource:
-                  - !Sub 'arn:aws:apigateway:*::/restapis'
-                  - !Sub 'arn:aws:apigateway:*::/restapis/*'
-                  - !Sub 'arn:aws:apigateway:*::/apis'
-                  - !Sub 'arn:aws:apigateway:*::/apis/*'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/*'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis/*'
 
   # ---------------------------------------------------------------------
   # 2. Custom resource: ensures the account-level API Gateway CloudWatch
@@ -302,8 +302,8 @@ Resources:
 
 Outputs:
   RoleArn:
-    Description: Paste this ARN into the Akto dashboard to complete the connection.
-    Value: !If
-      - ShouldCreateCrossAccountRole
-      - !GetAtt AktoCrossAccountRole.Arn
-      - !Sub 'arn:aws:iam::${AWS::AccountId}:role/akto/AktoApiGatewayLoggingRole'
+    Description: Share this ARN with Akto to complete the connection.
+    Value: !GetAtt AktoCrossAccountRole.Arn
+  Region:
+    Description: Region this role grants access to. Share with Akto.
+    Value: !Ref 'AWS::Region'
