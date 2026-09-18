@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a single cross-account IAM role that Akto's connector assumes to
+  read API Gateway execution logs and discover API specs in this account.
+  Access is restricted to one region and to API Gateway execution log
+  groups only, and the role can only be assumed when Akto presents the
+  agreed ExternalId. This template does NOT enable API Gateway logging —
+  that must already be configured on the stages you want Akto to see.
+
+Parameters:
+  AktoAWSAccountId:
+    Type: String
+    Description: >
+      AWS Account ID that Akto's connector for this account runs in.
+      Provided by Akto.
+    AllowedPattern: '^\d{12}$'
+  ExternalId:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: >
+      Unique value issued by Akto for this account. Akto must present it on
+      every AssumeRole call, so knowing the account ID and role name alone
+      is not enough to assume this role. Do not reuse or publish it.
+Resources:
+  AktoCrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Region-suffixed so the name matches the scope of its permissions,
+      # and so deploying to another region of the same account does not
+      # clash on this globally-unique name.
+      RoleName: !Sub 'AktoApiGatewayLoggingRole-${AWS::Region}'
+      Path: /akto/
+      Description: >-
+        Read-only access for Akto to API Gateway execution logs and API
+        specifications in this region.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AktoAWSAccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      Policies:
+        - PolicyName: AktoApiGatewayLogReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListLogGroups
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+              - Sid: ReadApiGatewayExecutionLogs
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*:*'
+              - Sid: DiscoverApiGatewaySpecs
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource:
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/*'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis'
+                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis/*'
+
+Outputs:
+  RoleArn:
+    Description: Share this ARN with Akto to complete the connection.
+    Value: !GetAtt AktoCrossAccountRole.Arn
+  Region:
+    Description: Region this role grants access to. Share with Akto.
+    Value: !Ref 'AWS::Region'
