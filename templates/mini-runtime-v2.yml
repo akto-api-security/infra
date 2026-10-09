@@ -181,8 +181,26 @@ Resources:
               await sendResponse(event, context, 'FAILED', {}, String(err));
             }
           };
+  # Separate from the role to avoid a circular dependency (role -> Lambda name -> role)
+  GetVpcDetailsLambdaLogsPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: GetVpcDetailsLambdaLogs
+      Roles:
+        - !Ref GetVpcDetailsLambdaRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: !Sub >-
+              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${GetVpcDetailsLambda}:*
   CustomSourceGetVpcDetails:
     Type: 'AWS::CloudFormation::CustomResource'
+    DependsOn: GetVpcDetailsLambdaLogsPolicy
     Properties:
       ServiceToken: !GetAtt
         - GetVpcDetailsLambda
@@ -269,9 +287,11 @@ Resources:
               - !Sub "export DATABASE_ABSTRACTOR_SERVICE_URL=${DatabaseAbstractorUrl}"
               - sudo yum install -y awscli || true
               - !Sub >-
-                export DATABASE_ABSTRACTOR_SERVICE_TOKEN=$(aws secretsmanager get-secret-value
+                DATABASE_ABSTRACTOR_SERVICE_TOKEN=$(aws secretsmanager get-secret-value
                 --secret-id ${DatabaseAbstractorTokenSecret} --region ${AWS::Region}
                 --query SecretString --output text)
+              - '[ -n "$DATABASE_ABSTRACTOR_SERVICE_TOKEN" ] || { echo "Failed to read DatabaseAbstractorToken from Secrets Manager"; exit 1; }'
+              - export DATABASE_ABSTRACTOR_SERVICE_TOKEN
               - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
               - touch /tmp/hello.txt
               - touch ~/hello.txt
