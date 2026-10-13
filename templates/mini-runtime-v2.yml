@@ -5,7 +5,10 @@ Description: >-
   contact support@akto.io.
 Parameters:
   SubnetId:
-    Type: 'AWS::EC2::Subnet::Id'
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: >-
+      Private subnets for Akto, at most one per Availability Zone, all in the
+      same VPC. Each subnet needs outbound internet access (typically via NAT).
   KeyPair:
     Type: 'AWS::EC2::KeyPair::KeyName'
   DatabaseAbstractorUrl:
@@ -142,7 +145,7 @@ Resources:
         - Arn
       Environment:
         Variables:
-          SUBNET_ID: !Ref SubnetId
+          SUBNET_ID: !Select [0, !Ref SubnetId]
       Code:
         ZipFile: |
           const { EC2Client, DescribeSubnetsCommand } = require('@aws-sdk/client-ec2');
@@ -267,7 +270,6 @@ Resources:
         KeyName: !Ref KeyPair
         NetworkInterfaces:
           - AssociatePublicIpAddress: false
-            SubnetId: !Ref SubnetId
             DeviceIndex: 0
             Groups:
               - !Ref AktoSecurityGroup
@@ -339,8 +341,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref AktoLaunchTemplate
         Version: !GetAtt AktoLaunchTemplate.LatestVersionNumber
-      VPCZoneIdentifier:
-        - !Ref SubnetId
+      VPCZoneIdentifier: !Ref SubnetId
       TargetGroupARNs:
         - !Ref AktoTrafficMirroringTargetGroup
         - !Ref AktoKafkaTargetGroup
@@ -362,8 +363,7 @@ Resources:
       Type: network
       Scheme: internal
       IpAddressType: ipv4
-      Subnets:
-        - !Ref SubnetId
+      Subnets: !Ref SubnetId
       LoadBalancerAttributes:
         - Key: load_balancing.cross_zone.enabled
           Value: 'true'
@@ -534,7 +534,7 @@ Resources:
         - Arn
       Environment:
         Variables:
-          SUBNET_ID: !Ref SubnetId
+          SUBNET_ID: !Select [0, !Ref SubnetId]
           CONTEXT_ANALYZER_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
           RUNTIME_PROCESSOR_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
           MODE: RUNTIME
