@@ -15,49 +15,49 @@ Parameters:
 Mappings:
   RegionMap:
     af-south-1:
-      AMI: ami-093ca241e4c72c205
+      AMI: ami-0f084342d7f5e20c8
     eu-north-1:
-      AMI: ami-0f58e72599cb99a79
+      AMI: ami-04c267a6ca05944f8
     ap-south-1:
-      AMI: ami-0400aca7799d8cf19
+      AMI: ami-0cd4165aeb4c1a32d
     eu-west-3:
-      AMI: ami-064c70d04ad799d5e
+      AMI: ami-0c809358d149b3ca3
     eu-west-2:
-      AMI: ami-0dfe6158087b5c0ac
+      AMI: ami-0971ecff4a7a231a6
     eu-south-1:
-      AMI: ami-07b2af763a8b958f3
+      AMI: ami-0d8672ab992932f99
     eu-west-1:
-      AMI: ami-047aad752a426ed48
+      AMI: ami-0f7a6ae0b7f75d496
     ap-northeast-3:
-      AMI: ami-0cffa2172948e071e
+      AMI: ami-00e32c9c57db03de7
     ap-northeast-2:
-      AMI: ami-087af0192368bc87c
+      AMI: ami-06349ab19e153f406
     me-south-1:
       AMI: ami-0a31e56929248acca
     ap-northeast-1:
-      AMI: ami-0828596b82405edd7
+      AMI: ami-033fab41988ee3766
     sa-east-1:
-      AMI: ami-0df67b3c17f090c24
+      AMI: ami-037c1f1096995bb4c
     ca-central-1:
-      AMI: ami-0eb3718c42cb70e52
+      AMI: ami-0a23f7c709e7ba0d1
     ap-east-1:
-      AMI: ami-0e992f1e63814db10
+      AMI: ami-0214dccfc2bd19534
     ap-southeast-1:
-      AMI: ami-0ba98499caf94125a
+      AMI: ami-08c9f7e48c17bba07
     ap-southeast-2:
-      AMI: ami-0849cc8fe4ceaf988
+      AMI: ami-0cdf69fbf2afc0c3c
     eu-central-1:
-      AMI: ami-0f7585ae7a0d9a25a
+      AMI: ami-085c681bbe9389324
     ap-southeast-3:
-      AMI: ami-0cf40308729b83366
+      AMI: ami-01a74999f054ec9c2
     us-east-1:
-      AMI: ami-0d52ddcdf3a885741
+      AMI: ami-097855b862d5b1eb2
     us-east-2:
-      AMI: ami-04148302a14f7d12b
+      AMI: ami-02116a92b402a4f8d
     us-west-1:
-      AMI: ami-0ee3e1e65adeef858
+      AMI: ami-0cd26b05d55882da3
     us-west-2:
-      AMI: ami-0ec021424fb596d6c
+      AMI: ami-071672625ad35d880
 Resources:
   GetAktoSetupDetailsLambdaBasicExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -236,18 +236,11 @@ Resources:
               - touch /tmp/hello.txt
               - touch ~/hello.txt
               - sudo yum update -y
-              - sudo yum install -y python python-setuptools
-              - sudo yum install -y docker
+              - sudo yum install -y docker unzip
               - sudo dockerd&
               - sudo systemctl enable /usr/lib/systemd/system/docker.service
-              - sudo mkdir -p /opt/aws/bin
+              - sudo yum install -y aws-cfn-bootstrap || true
               - export COMPOSE_FILE=docker-compose-mini-runtime.yml
-              - >-
-                sudo wget
-                https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-              - >-
-                sudo python -m easy_install --script-dir /opt/aws/bin
-                aws-cfn-bootstrap-latest.tar.gz
               - >-
                 curl -fsSL
                 'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto'
