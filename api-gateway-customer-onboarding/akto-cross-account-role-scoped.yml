@@ -27,10 +27,6 @@ Resources:
   AktoCrossAccountRole:
     Type: AWS::IAM::Role
     Properties:
-      # Region-suffixed so the name matches the scope of its permissions,
-      # and so deploying to another region of the same account does not
-      # clash on this globally-unique name.
-      RoleName: !Sub 'AktoApiGatewayLoggingRole-${AWS::Region}'
       Path: /akto/
       Description: >-
         Read-only access for Akto to API Gateway execution logs and API
