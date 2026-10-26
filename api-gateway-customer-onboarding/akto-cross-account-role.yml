@@ -112,13 +112,6 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: WriteOwnLambdaLogs
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               - Effect: Allow
                 Action:
                   - apigateway:GET
@@ -141,6 +134,22 @@ Resources:
                 Condition:
                   StringEquals:
                     iam:PassedToService: apigateway.amazonaws.com
+
+  EnableStageLoggingFunctionLogsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WriteOwnLambdaLogs
+      Roles:
+        - !Ref EnableStageLoggingFunctionRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnableStageLoggingFunction}:*'
 
   EnableStageLoggingFunction:
     Type: AWS::Lambda::Function
@@ -293,6 +302,7 @@ Resources:
 
   EnableStageLogging:
     Type: AWS::CloudFormation::CustomResource
+    DependsOn: EnableStageLoggingFunctionLogsPolicy
     Properties:
       ServiceToken: !GetAtt EnableStageLoggingFunction.Arn
       RestApiIds: !Ref RestApiIds
