@@ -46,13 +46,9 @@ Resources:
   # ---------------------------------------------------------------------
   # 1. Cross-account role Akto's connector assumes to read logs / specs
   # ---------------------------------------------------------------------
-  AktoCrossAccountRole:
+  AktoApiGatewayLoggingCrossAccountRole:
     Type: AWS::IAM::Role
     Properties:
-      # Region-suffixed so the name matches the scope of its permissions,
-      # and so deploying to another region of the same account does not
-      # clash on this globally-unique name.
-      RoleName: !Sub 'AktoApiGatewayLoggingRole-${AWS::Region}'
       Path: /akto/
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -305,7 +301,7 @@ Resources:
 Outputs:
   RoleArn:
     Description: Share this ARN with Akto to complete the connection.
-    Value: !GetAtt AktoCrossAccountRole.Arn
+    Value: !GetAtt AktoApiGatewayLoggingCrossAccountRole.Arn
   Region:
     Description: Region this role grants access to. Share with Akto.
     Value: !Ref 'AWS::Region'
