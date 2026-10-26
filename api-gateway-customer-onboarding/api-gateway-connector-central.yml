@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploy Akto's central AWS API Gateway connector on a single EC2 instance. This connector
+  reads API Gateway execution logs and discovers OpenAPI specs across several AWS accounts by
+  assuming a cross-account role in each one, instead of only the account it runs in. Each
+  target account must first run akto-cross-account-role-scoped.yml (in
+  api-gateway-customer-onboarding/), trusting this central account and sharing one ExternalId.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Connector settings
+        Parameters:
+          - VpcId
+          - SubnetId
+          - KeyPair
+          - InstanceType
+          - AktoKafkaBrokerMal
+          - DatabaseAbstractorToken
+      - Label:
+          default: Cross-account access
+        Parameters:
+          - CrossAccountRoleArns
+          - CrossAccountExternalId
+          - LogGroupPrefix
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the connector EC2 instance should run.
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet where the connector EC2 instance should run.
+
+  KeyPair:
+    Type: String
+    Default: ''
+    Description: Optional EC2 key pair name. Leave empty to use SSM only.
+
+  InstanceType:
+    Type: String
+    Default: c5.large
+    Description: EC2 instance type for connector host.
+
+  AktoKafkaBrokerMal:
+    Type: String
+    Description: Kafka broker endpoint in format <AktoNLB-DNS>:9092.
+
+  DatabaseAbstractorToken:
+    Type: String
+    NoEcho: true
+    Description: Database abstractor token from Akto Dashboard.
+
+  CrossAccountRoleArns:
+    Type: CommaDelimitedList
+    Description: >-
+      Comma-separated RoleArn(s) output by running akto-cross-account-role-scoped.yml in each
+      target AWS account. Scopes this instance's own IAM permissions to exactly these roles.
+      You must ALSO add these same ARNs in the Akto dashboard (AWS Role ARNs field for this
+      account) - the dashboard-managed list is what actually tells the connector which
+      accounts to monitor; this parameter only limits what this instance is allowed to assume.
+
+  CrossAccountExternalId:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: >-
+      Shared ExternalId configured on every target account's cross-account role (same value
+      passed as ExternalId to akto-cross-account-role-scoped.yml in each account).
+
+  LogGroupPrefix:
+    Type: String
+    Default: API-Gateway-Execution-Logs
+    Description: >-
+      Log group name prefix to monitor in each target account. Leave at the default unless
+      API Gateway execution logging in those accounts uses a custom log group name.
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPair, '']]
+
+Resources:
+  DatabaseAbstractorTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Akto Database Abstractor token for the central API Gateway connector
+      SecretString: !Ref DatabaseAbstractorToken
+
+  ConnectorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: AssumeCrossAccountLoggingRoles
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Ref CrossAccountRoleArns
+        - PolicyName: ReadDatabaseAbstractorTokenSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseAbstractorTokenSecret
+
+  ConnectorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ConnectorInstanceRole
+
+  ConnectorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Akto central API Gateway connector EC2
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  ConnectorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref ConnectorInstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref ConnectorSecurityGroup
+      KeyName: !If [HasKeyPair, !Ref KeyPair, !Ref AWS::NoValue]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      Tags:
+        - Key: Name
+          Value: akto-api-gateway-connector-central
+      UserData:
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              set -e
+              yum update -y
+              yum install -y docker
+              systemctl enable docker
+              systemctl start docker
+
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -SL https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+              mkdir -p /opt/akto-connector
+
+              DATABASE_ABSTRACTOR_TOKEN=$(aws secretsmanager get-secret-value --secret-id ${DatabaseAbstractorTokenSecret} --region ${AWS::Region} --query SecretString --output text)
+              [ -n "$DATABASE_ABSTRACTOR_TOKEN" ] || { echo "Failed to read DatabaseAbstractorToken from Secrets Manager"; exit 1; }
+
+              cat > /opt/akto-connector/connector.env <<ENVVARS
+              AKTO_BYTES_IN_THRESHOLD=100
+              AKTO_TRAFFIC_BATCH_TIME_SECS=10
+              AKTO_TRAFFIC_BATCH_SIZE=100
+              AKTO_KAFKA_BROKER_MAL=${AktoKafkaBrokerMal}
+              CLOUDWATCH_READ_BATCH_SIZE=5
+              AWS_REGION=${AWS::Region}
+              DATABASE_ABSTRACTOR_TOKEN=$DATABASE_ABSTRACTOR_TOKEN
+              CROSS_ACCOUNT_ROLE_ARN=${CrossAccountRoleArnsStr}
+              CROSS_ACCOUNT_EXTERNAL_ID=${CrossAccountExternalId}
+              LOG_GROUP_PREFIX=${LogGroupPrefix}
+              DISCOVER_OPENAPI_SPEC=true
+              OPENAPI_DISCOVERY_INTERVAL_MINUTES=15
+              ENVVARS
+
+              cat > /opt/akto-connector/docker-compose.yml <<COMPOSE
+              version: "3.9"
+
+              services:
+                api-gateway-logging:
+                  image: aktosecurity/mirror-api-logging:api-gateway-logging-temp-cred
+                  pull_policy: always
+                  container_name: api-gateway-logging
+                  restart: unless-stopped
+                  env_file:
+                    - ./connector.env
+
+                watchtower:
+                  image: containrrr/watchtower
+                  restart: always
+                  volumes:
+                    - /var/run/docker.sock:/var/run/docker.sock
+                  env_file: ./watchtower.env
+                  labels:
+                    com.centurylinklabs.watchtower.enable: "false"
+              COMPOSE
+
+              cat > /opt/akto-connector/watchtower.env <<WATCHTOWER
+              WATCHTOWER_CLEANUP=true
+              WATCHTOWER_POLL_INTERVAL=1800
+              WATCHTOWER
+
+              cd /opt/akto-connector
+              docker compose up -d
+            - CrossAccountRoleArnsStr: !Join [",", !Ref CrossAccountRoleArns]
+
+Outputs:
+  ConnectorInstanceId:
+    Description: Connector EC2 instance ID
+    Value: !Ref ConnectorInstance
+
+  ConnectorPrivateIp:
+    Description: Connector EC2 private IP
+    Value: !GetAtt ConnectorInstance.PrivateIp
+
+  ConnectorSecurityGroupId:
+    Description: Security group ID attached to connector EC2
+    Value: !Ref ConnectorSecurityGroup
+
+  ConfiguredCrossAccountRoleArns:
+    Description: >-
+      Role ARNs this instance is allowed to assume. Reminder: also add these same ARNs in the
+      Akto dashboard (AWS Role ARNs field) - the dashboard list is what the connector actually
+      monitors, this instance's IAM permissions only cap what it's allowed to reach.
+    Value: !Join [",", !Ref CrossAccountRoleArns]
