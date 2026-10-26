@@ -57,10 +57,12 @@ Parameters:
     Type: CommaDelimitedList
     Description: >-
       Comma-separated RoleArn(s) output by running akto-cross-account-role-scoped.yml in each
-      target AWS account. Scopes this instance's own IAM permissions to exactly these roles.
-      You must ALSO add these same ARNs in the Akto dashboard (AWS Role ARNs field for this
-      account) - the dashboard-managed list is what actually tells the connector which
-      accounts to monitor; this parameter only limits what this instance is allowed to assume.
+      target AWS account, deployed in this SAME region as this stack - the connector only reads
+      each account's resources in its own region. Scopes this instance's own IAM permissions to
+      exactly these roles. You must ALSO add these same ARNs in the Akto dashboard (AWS Role
+      ARNs field for this account) - the dashboard-managed list is what actually tells the
+      connector which accounts to monitor; this parameter only limits what this instance is
+      allowed to assume.
 
   CrossAccountExternalId:
     Type: String
