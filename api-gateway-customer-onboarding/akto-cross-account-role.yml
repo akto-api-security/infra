@@ -1,30 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Sets up everything Akto needs to connect to this AWS account's API Gateway:
-  (1) ensures the account-level API Gateway CloudWatch Logs role exists,
-  creating one only if the account doesn't already have one configured,
-  (2) enables execution logging (INFO + data trace) on every stage of the
-  given REST API(s) — or every REST API in the region if none are specified
-  — and (3) creates a cross-account IAM role, scoped to this region, that
-  Akto's connector can assume to read those logs and discover API specs.
-  The role can only be assumed when Akto presents the agreed ExternalId.
+  Sets up everything needed to connect this AWS account's API Gateway to the
+  Akto connector: (1) ensures the account-level API Gateway CloudWatch Logs
+  role exists, creating one only if the account doesn't already have one
+  configured, (2) enables execution logging (INFO + data trace) on every
+  stage of the given REST API(s) — or every REST API in the region if none
+  are specified — and (3) creates a cross-account IAM role, scoped to this
+  region, that the connector can assume to read those logs and discover API
+  specs. The role can only be assumed by that account, and only when it
+  presents the agreed ExternalId. See docs.akto.io for setup details.
 
 Parameters:
   ServiceAccountId:
     Type: String
-    Description: >
-      AWS Account ID that Akto's connector runs in - either the customer's own
-      account running the single-account connector, or a central account running
-      the multi-account connector. Provided by Akto.
+    Description: AWS Account ID that the connector runs in.
     AllowedPattern: '^\d{12}$'
   ExternalId:
     Type: String
     NoEcho: true
     MinLength: 16
     Description: >
-      Unique value issued by Akto for this account. Akto must present it on
-      every AssumeRole call, so knowing the account ID and role name alone
-      is not enough to assume this role. Do not reuse or publish it.
+      Unique value that must be presented on every AssumeRole call, so knowing
+      the account ID and role name alone is not enough to assume this role.
   RestApiIds:
     Type: CommaDelimitedList
     Default: ''

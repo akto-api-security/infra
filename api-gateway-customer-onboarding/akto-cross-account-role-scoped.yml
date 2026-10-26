@@ -1,28 +1,25 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Creates a single cross-account IAM role that Akto's connector assumes to
+  Creates a single cross-account IAM role that the Akto connector assumes to
   read API Gateway execution logs and discover API specs in this account.
   Access is restricted to one region and to API Gateway execution log
-  groups only, and the role can only be assumed when Akto presents the
-  agreed ExternalId. This template does NOT enable API Gateway logging —
-  that must already be configured on the stages you want Akto to see.
+  groups only, and the role can only be assumed by that account, and only
+  when it presents the agreed ExternalId. This template does NOT enable API
+  Gateway logging — that must already be configured on the stages you want
+  monitored. See docs.akto.io for setup details.
 
 Parameters:
   ServiceAccountId:
     Type: String
-    Description: >
-      AWS Account ID that Akto's connector runs in - either the customer's own
-      account running the single-account connector, or a central account running
-      the multi-account connector. Provided by Akto.
+    Description: AWS Account ID that the connector runs in.
     AllowedPattern: '^\d{12}$'
   ExternalId:
     Type: String
     NoEcho: true
     MinLength: 16
     Description: >
-      Unique value issued by Akto for this account. Akto must present it on
-      every AssumeRole call, so knowing the account ID and role name alone
-      is not enough to assume this role. Do not reuse or publish it.
+      Unique value that must be presented on every AssumeRole call, so knowing
+      the account ID and role name alone is not enough to assume this role.
 Resources:
   AktoCrossAccountRole:
     Type: AWS::IAM::Role
