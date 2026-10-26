@@ -10,10 +10,12 @@ Description: >
   The role can only be assumed when Akto presents the agreed ExternalId.
 
 Parameters:
-  AktoAWSAccountId:
+  ServiceAccountId:
     Type: String
     Description: >
-      AWS Account ID where Akto's connector instance for this customer runs.
+      AWS Account ID that Akto's connector runs in - either the customer's own
+      account running the single-account connector, or a central account running
+      the multi-account connector. Provided by Akto.
     AllowedPattern: '^\d{12}$'
   ExternalId:
     Type: String
@@ -57,7 +59,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AktoAWSAccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${ServiceAccountId}:root'
             Action: sts:AssumeRole
             Condition:
               StringEquals:
