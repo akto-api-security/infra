@@ -238,11 +238,12 @@ resource "aws_security_group" "vpc_endpoint_security_group" {
   name_prefix = "akto-vpc-endpoint-sg"
   vpc_id      = data.aws_vpc.selected.id
 
+  # Whole VPC: with private DNS, every instance in the VPC uses this endpoint for Secrets Manager
   ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.akto_security_group.id]
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 }
 
