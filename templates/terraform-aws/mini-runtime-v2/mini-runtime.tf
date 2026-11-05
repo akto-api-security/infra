@@ -275,7 +275,7 @@ resource "aws_launch_template" "akto_launch_template" {
     sudo dockerd&
     sudo systemctl enable /usr/lib/systemd/system/docker.service
     export COMPOSE_FILE=docker-compose-mini-runtime.yml
-    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto' > cf-deploy-akto
+    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/quick-setup-1.0.0/cf-deploy-akto' > cf-deploy-akto
     sudo chmod 700 cf-deploy-akto
     ./cf-deploy-akto < <(echo 'test')
     sudo echo >> ~/akto/infra/docker-runtime.env
@@ -285,7 +285,7 @@ resource "aws_launch_template" "akto_launch_template" {
     sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >> ~/akto/infra/docker-mini-runtime.env
     set -x
     sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
-    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/feature/mini-runtime-cft/cf-deploy-akto-start' > cf-deploy-akto-start
+    curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/quick-setup-1.0.0/cf-deploy-akto-start' > cf-deploy-akto-start
     sudo chmod 700 cf-deploy-akto-start
     ./cf-deploy-akto-start < <(echo 'test')
   EOF
