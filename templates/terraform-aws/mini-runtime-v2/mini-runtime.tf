@@ -126,6 +126,9 @@ locals {
   ami_id = local.mappings.RegionMap[var.region].AMI
 
   name_prefix = var.environment != "" ? "${var.environment}-" : ""
+
+  # Ingress always allows the instance subnet (NLB traffic and health checks) in addition to cidr_blocks
+  ingress_cidrs = distinct(concat(var.cidr_blocks, [data.aws_subnet.selected.cidr_block]))
 }
 
 # Data source for Subnet
@@ -239,19 +242,19 @@ resource "aws_security_group" "akto_security_group" {
     from_port   = 4789
     to_port     = 4789
     protocol    = "udp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = local.ingress_cidrs
   }
   ingress {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = local.ingress_cidrs
   }
   ingress {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = local.ingress_cidrs
   }
 
   egress {
@@ -278,7 +281,7 @@ resource "aws_security_group" "lb_security_group" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = var.cidr_blocks
+    cidr_blocks = [data.aws_subnet.selected.cidr_block]
   }
 }
 
