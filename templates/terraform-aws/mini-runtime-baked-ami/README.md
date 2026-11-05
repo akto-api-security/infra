@@ -8,6 +8,7 @@ An Amazon Linux 2023 AMI with Docker, docker-compose, the Akto compose/env files
 | `mini-runtime.pkr.hcl` | Packer build definition |
 | `build-ami.sh` | Builds the AMI |
 | `share-ami.sh` | Shares the AMI with a customer AWS account |
+| `delete-ami.sh` | Deletes the AMI and its snapshot |
 | `mini-runtime.tf` | Terraform deployment that uses the AMI |
 
 ## Prerequisites
@@ -40,3 +41,9 @@ Set `ami_id` (and the other values) in `mini-runtime.tfvars`, then:
 terraform init
 terraform apply -var-file=mini-runtime.tfvars
 ```
+
+## 4. Delete an AMI
+```bash
+./delete-ami.sh <region> <ami-id>
+```
+Deregisters the AMI and deletes its snapshot. Run once per region. Cannot be undone, and customers it was shared with (and who did not copy it) can no longer launch it.
