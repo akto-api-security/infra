@@ -54,13 +54,76 @@ variable "cidr_blocks" {
 }
 
 
-# Latest Amazon Linux 2023 AMI for the region (AWS public SSM parameter)
-data "aws_ssm_parameter" "al2023_ami" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-}
-
 locals {
-  ami_id = data.aws_ssm_parameter.al2023_ami.insecure_value
+  mappings = {
+    RegionMap = {
+      af-south-1 = {
+        AMI = "ami-0bf140e4e0e2f0412"
+      }
+      eu-north-1 = {
+        AMI = "ami-0516089d963059a51"
+      }
+      ap-south-1 = {
+        AMI = "ami-0f19324397f53458f"
+      }
+      eu-west-3 = {
+        AMI = "ami-07dcdf1066ae9dad3"
+      }
+      eu-west-2 = {
+        AMI = "ami-03d359cc404d860ea"
+      }
+      eu-south-1 = {
+        AMI = "ami-03361121628ba993f"
+      }
+      eu-west-1 = {
+        AMI = "ami-00fcaf85b81e85b1d"
+      }
+      ap-northeast-3 = {
+        AMI = "ami-0a10569e5050f3968"
+      }
+      ap-northeast-2 = {
+        AMI = "ami-05becc39a92b78fa5"
+      }
+      ap-northeast-1 = {
+        AMI = "ami-0c051224e18c11f2e"
+      }
+      sa-east-1 = {
+        AMI = "ami-08c89ad8a13b9b4f9"
+      }
+      ca-central-1 = {
+        AMI = "ami-0b3f293126f3e2677"
+      }
+      ap-east-1 = {
+        AMI = "ami-07a3e4c5c2ce4ca0f"
+      }
+      ap-southeast-1 = {
+        AMI = "ami-01127915c7b29e7ca"
+      }
+      ap-southeast-2 = {
+        AMI = "ami-062900c135ab91582"
+      }
+      eu-central-1 = {
+        AMI = "ami-01376afa3e7def694"
+      }
+      ap-southeast-3 = {
+        AMI = "ami-0828288eacde44176"
+      }
+      us-east-1 = {
+        AMI = "ami-0c230065b91270bc6"
+      }
+      us-east-2 = {
+        AMI = "ami-02dae70ab25064279"
+      }
+      us-west-1 = {
+        AMI = "ami-07645bd2e582378f1"
+      }
+      us-west-2 = {
+        AMI = "ami-09f02015912e773f7"
+      }
+    }
+  }
+  # Lookup the AMI ID based on the region (Amazon Linux 2023)
+  ami_id = local.mappings.RegionMap[var.region].AMI
 
   name_prefix = var.environment != "" ? "${var.environment}-" : ""
 }
@@ -160,11 +223,6 @@ resource "aws_iam_role_policy" "ec2_instance_secret_policy" {
       "Resource" : var.database_abstractor_token_secret_arn
     }]
   })
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_instance_ssm_policy" {
-  role       = aws_iam_role.ec2_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_instance_profile" "iam_instance_profile" {
