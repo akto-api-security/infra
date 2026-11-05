@@ -11,6 +11,7 @@ if [ $# -ne 2 ]; then
 fi
 REGION="$1"
 AMI_ID="$2"
+export AWS_PAGER=""   # don't stop at the AWS CLI pager
 
 # Snapshot ID has to be read before deregistering
 SNAP_ID=$(aws ec2 describe-images --region "$REGION" --image-ids "$AMI_ID" \

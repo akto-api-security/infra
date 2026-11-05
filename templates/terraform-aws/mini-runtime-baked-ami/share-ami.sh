@@ -12,6 +12,7 @@ fi
 ACCOUNT_ID="$1"
 REGION="$2"
 AMI_ID="$3"
+export AWS_PAGER=""   # don't stop at the AWS CLI pager
 
 # Lets the account launch instances from the AMI
 aws ec2 modify-image-attribute --region "$REGION" --image-id "$AMI_ID" \
