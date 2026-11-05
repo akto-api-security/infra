@@ -306,6 +306,7 @@ resource "aws_launch_template" "akto_launch_template" {
     set -x
     echo AKTO_KAFKA_IP='${aws_lb.akto_nlb.dns_name}' >> .env
     docker-compose up -d $(docker-compose config --services | grep -v '^watchtower$')
+    echo " -- !! AKTO LAUNCHED !! --"
   EOF
   )
 }
