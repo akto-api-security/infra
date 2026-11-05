@@ -7,3 +7,15 @@ data/*
 mirroring-data
 .vscode/**
 .DS_Store
+
+# Private keys
+*.pem
+
+# Terraform local files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+crash.log
