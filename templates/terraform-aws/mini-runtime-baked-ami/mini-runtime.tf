@@ -59,7 +59,7 @@ variable "ami_id" {
 }
 
 variable "egress_cidr_blocks" {
-  description = "CIDR blocks the instances can reach (e.g. Akto IPs and the VPC CIDR)"
+  description = "CIDR blocks the instances can reach (e.g. Akto IPs). The VPC CIDR is always allowed"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
@@ -76,6 +76,9 @@ locals {
 
   # Ingress always allows the instance subnet (NLB traffic and health checks) in addition to cidr_blocks
   ingress_cidrs = distinct(concat(var.cidr_blocks, [data.aws_subnet.selected.cidr_block]))
+
+  # Egress always allows the VPC CIDR (NLB and Secrets Manager endpoint) in addition to egress_cidr_blocks
+  egress_cidrs = distinct(concat(var.egress_cidr_blocks, [data.aws_vpc.selected.cidr_block]))
 }
 
 # Data source for Subnet
@@ -172,7 +175,7 @@ resource "aws_security_group" "akto_security_group" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = var.egress_cidr_blocks
+    cidr_blocks = local.egress_cidrs
   }
 }
 
