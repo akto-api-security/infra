@@ -142,42 +142,6 @@ data "aws_vpc" "selected" {
 }
 
 
-# IAM Role for Lambda functions
-resource "aws_iam_role" "lambda_execution_role" {
-  name               = "${local.name_prefix}GetAktoSetupDetailsLambdaBasicExecutionRole"
-  assume_role_policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [{
-      "Effect" : "Allow",
-      "Principal" : {
-        "Service" : "lambda.amazonaws.com"
-      },
-      "Action" : "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "get_akto_lambda_policy" {
-  name   = "GetAktoSetupDetailsExecuteLambda"
-  role   = aws_iam_role.lambda_execution_role.id
-  policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [{
-      "Effect" : "Allow",
-      "Action" : [
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeTrafficMirrorSessions",
-        "ec2:DescribeInstances",
-        "ec2:DescribeVpcs",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "elasticloadbalancing:DescribeTargetHealth"
-      ],
-      "Resource" : "*"
-    }]
-  })
-}
-
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2_instance_role" {
   name               = "${local.name_prefix}AktoMiniRuntimeInstanceRole"
@@ -344,6 +308,8 @@ resource "aws_launch_template" "akto_launch_template" {
     sudo echo DATABASE_ABSTRACTOR_SERVICE_URL=$DATABASE_ABSTRACTOR_SERVICE_URL >> ~/akto/infra/docker-mini-runtime.env
     set +x
     sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >> ~/akto/infra/docker-mini-runtime.env
+    sudo echo AKTO_THREAT_PROTECTION_BACKEND_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >> ~/akto/infra/docker-threat-detection.env
+    sudo echo DATABASE_ABSTRACTOR_SERVICE_TOKEN=$DATABASE_ABSTRACTOR_SERVICE_TOKEN >> ~/akto/infra/docker-threat-detection.env
     set -x
     sudo echo AKTO_KAFKA_IP=$AKTO_KAFKA_IP >> ~/akto/infra/.env
     curl -fsSL 'https://raw.githubusercontent.com/akto-api-security/infra/quick-setup-1.0.0/cf-deploy-akto-start' > cf-deploy-akto-start
