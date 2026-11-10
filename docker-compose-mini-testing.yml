@@ -10,6 +10,7 @@ services:
 
   akto-api-security-puppeteer-replay:
     image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
+    container_name: akto-puppeteer-replay
     ports:
       - "3000:3000"
     environment:
