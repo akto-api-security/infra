@@ -1,6 +1,7 @@
 version: '2.1'
 # CYBORG fleet. Used with: COMPOSE_FILE=cyborg/docker-compose.yml (run from ~/akto/infra)
-# Phase 1 = copy of docker-compose-producer-writer-log-ingestion-high-mem.yml, only mem_limit lowered.
+# Phase 1 = copy of docker-compose-producer-writer-log-ingestion-high-mem.yml with only two changes:
+#   (1) mem_limit lowered   (2) every container has an explicit name (cyborg-*), no auto-generated infra_*_1 names.
 
 services:
   zoo1:
@@ -12,7 +13,7 @@ services:
       - ./data-zoo-data:/var/lib/zookeeper/data
       - ./data-zoo-logs:/var/lib/zookeeper/log
       - ./data-zoo-secrets:/etc/zookeeper/secrets              
-    container_name: zoo1
+    container_name: cyborg-zookeeper
     ports:
       - "2181:2181"
     environment:
@@ -22,6 +23,7 @@ services:
 
   kafka1:
     image: public.ecr.aws/aktosecurity/confluentinc-cp-kafka:7.9.2-1-ubi8
+    container_name: cyborg-kafka
     restart: always
     hostname: kafka1
     user: "0"
@@ -94,6 +96,7 @@ services:
 
   akto-api-security-writes-consumer-2:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
+    container_name: cyborg-consumer-account-1736798101
     env_file: ./docker-writes-consumer.env
     environment:
       AKTO_KAFKA_ACCOUNT_ID: 1736798101
@@ -112,6 +115,7 @@ services:
 
   akto-api-security-writes-consumer-traffic:
     image: public.ecr.aws/aktosecurity/akto-api-security-database-abstractor:kafkalatest
+    container_name: cyborg-consumer-traffic
     env_file: ./docker-writes-consumer-traffic.env
     environment:
       APP_NAME: "consumer-traffic"
@@ -129,7 +133,7 @@ services:
 
   fluentbit:
     image: fluent/fluent-bit:latest
-    container_name: fluentbit
+    container_name: cyborg-fluentbit
     env_file: ./docker-fluentbit.env
     ports:
       - "24224:24224"
@@ -143,6 +147,7 @@ services:
 
   watchtower:
     image: public.ecr.aws/aktosecurity/containrrr-watchtower:latest
+    container_name: cyborg-watchtower
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
