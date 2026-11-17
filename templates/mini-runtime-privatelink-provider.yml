@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Akto mini-runtime PrivateLink provider. Run once in the account where
+  mini-runtime-v2 is deployed. Exposes the internal Akto NLB (Kafka 9092) as a
+  VPC Endpoint Service to the listed accounts, and creates a private hosted zone
+  so Kafka's advertised hostname resolves to the NLB inside this VPC.
+Parameters:
+  NlbArn:
+    Type: String
+    Description: AktoNLBArn output of the mini-runtime-v2 stack.
+  NlbDnsName:
+    Type: String
+    Description: AktoNLB output (NLB DNS name) of the mini-runtime-v2 stack.
+  NlbCanonicalHostedZoneId:
+    Type: String
+    Description: AktoNLBCanonicalHostedZoneId output of the mini-runtime-v2 stack.
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: AktoVpcId output of the mini-runtime-v2 stack (VPC of the NLB).
+  AllowedAccountIds:
+    Type: CommaDelimitedList
+    Description: >-
+      12-digit AWS account IDs allowed to connect, comma separated with no
+      spaces (e.g. 111111111111,222222222222).
+  KafkaHostname:
+    Type: String
+    Default: aktonlb.internal
+    Description: >-
+      Hostname Kafka advertises. Must match KafkaAdvertisedHost in the
+      mini-runtime-v2 stack and KafkaHostname in every consumer stack.
+Resources:
+  AktoEndpointService:
+    Type: 'AWS::EC2::VPCEndpointService'
+    Properties:
+      NetworkLoadBalancerArns:
+        - !Ref NlbArn
+      AcceptanceRequired: false
+  AktoEndpointServicePermissions:
+    Type: 'AWS::EC2::VPCEndpointServicePermissions'
+    Properties:
+      ServiceId: !Ref AktoEndpointService
+      # 111,222 -> arn:aws:iam::111:root,arn:aws:iam::222:root
+      AllowedPrincipals: !Split
+        - ','
+        - !Sub
+          - 'arn:aws:iam::${Ids}:root'
+          - Ids: !Join
+              - ':root,arn:aws:iam::'
+              - !Ref AllowedAccountIds
+
+  # Resolves KafkaHostname to the NLB for clients inside the mini-runtime VPC
+  KafkaHostedZone:
+    Type: 'AWS::Route53::HostedZone'
+    Properties:
+      Name: !Ref KafkaHostname
+      HostedZoneConfig:
+        Comment: Akto Kafka advertised hostname -> Akto NLB
+      VPCs:
+        - VPCId: !Ref VpcId
+          VPCRegion: !Ref 'AWS::Region'
+  KafkaRecord:
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref KafkaHostedZone
+      Name: !Ref KafkaHostname
+      Type: A
+      AliasTarget:
+        DNSName: !Ref NlbDnsName
+        HostedZoneId: !Ref NlbCanonicalHostedZoneId
+        EvaluateTargetHealth: false
+Outputs:
+  EndpointServiceName:
+    Description: Give this to each consumer account (EndpointServiceName parameter)
+    Value: !Sub 'com.amazonaws.vpce.${AWS::Region}.${AktoEndpointService}'
+  EndpointServiceId:
+    Value: !Ref AktoEndpointService
+  KafkaBootstrap:
+    Value: !Sub '${KafkaHostname}:9092'

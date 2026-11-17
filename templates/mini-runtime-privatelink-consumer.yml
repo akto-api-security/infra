@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Akto mini-runtime PrivateLink consumer. Run in each account (once per VPC)
+  that sends traffic to Akto Kafka. Creates an interface endpoint to the Akto
+  endpoint service and a private hosted zone so Kafka's advertised hostname
+  resolves to this endpoint. Agents then use KafkaHostname:9092 as bootstrap.
+Parameters:
+  EndpointServiceName:
+    Type: String
+    Description: >-
+      EndpointServiceName output of the provider stack
+      (com.amazonaws.vpce.<region>.vpce-svc-xxxxxxxx).
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VPC where the Akto agents run. Needs DNS resolution and DNS hostnames enabled.
+  SubnetIds:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: >-
+      Subnets for the endpoint, at most one per AZ. At least one must be in an
+      AZ ID listed in the provider's NlbAvailabilityZoneIds output.
+  IngressCidr:
+    Type: String
+    Description: CIDR allowed to reach the endpoint on TCP 9092 (e.g. this VPC's CIDR).
+  KafkaHostname:
+    Type: String
+    Default: aktonlb.internal
+    Description: Must match KafkaHostname in the provider stack.
+Resources:
+  AktoEndpointSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Akto Kafka PrivateLink endpoint (TCP 9092)
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 9092
+          ToPort: 9092
+          CidrIp: !Ref IngressCidr
+          Description: Akto agents to Kafka
+  AktoVpcEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Ref EndpointServiceName
+      VpcId: !Ref VpcId
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref AktoEndpointSecurityGroup
+      PrivateDnsEnabled: false
+  KafkaHostedZone:
+    Type: 'AWS::Route53::HostedZone'
+    Properties:
+      Name: !Ref KafkaHostname
+      HostedZoneConfig:
+        Comment: Akto Kafka advertised hostname -> Akto PrivateLink endpoint
+      VPCs:
+        - VPCId: !Ref VpcId
+          VPCRegion: !Ref 'AWS::Region'
+  KafkaRecord:
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref KafkaHostedZone
+      Name: !Ref KafkaHostname
+      Type: A
+      # The first DnsEntries item is the regional name, formatted "<zoneId>:<dnsName>"
+      AliasTarget:
+        HostedZoneId: !Select [0, !Split [':', !Select [0, !GetAtt AktoVpcEndpoint.DnsEntries]]]
+        DNSName: !Select [1, !Split [':', !Select [0, !GetAtt AktoVpcEndpoint.DnsEntries]]]
+        EvaluateTargetHealth: false
+Outputs:
+  VpcEndpointId:
+    Value: !Ref AktoVpcEndpoint
+  KafkaBootstrap:
+    Description: Configure Akto agents with this bootstrap server
+    Value: !Sub '${KafkaHostname}:9092'
