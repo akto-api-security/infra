@@ -2,9 +2,11 @@ version: '2.1'
 
 services:
   akto-api-security-dashboard:
+    container_name: akto-dashboard
     image: aktosecurity/akto-api-security-dashboard:local
     env_file: ./docker-dashboard.env
     restart: always
+    mem_limit: 12g
     ports: 
       - "8080:8080"
     depends_on:
@@ -16,6 +18,7 @@ services:
         max-file: "3"
 
   akto-internal:
+    container_name: akto-internal
     image: aktosecurity/akto-internal:local
     env_file: ./docker-internal.env
     restart: always
@@ -49,6 +52,7 @@ services:
       com.centurylinklabs.watchtower.enable: "false"
 
   kafka1:
+    container_name: kafka1
     image: confluentinc/cp-kafka:6.2.1
     restart: on-failure:10
     hostname: kafka1
@@ -96,6 +100,7 @@ services:
       # - THREAT_BACKEND_TOKEN=${THREAT_BACKEND_TOKEN}
 
   akto-puppeteer-replay:
+    container_name: akto-puppeteer-replay
     image: public.ecr.aws/aktosecurity/akto-puppeteer-replay:latest
     ports:
       - "3000:3000"
@@ -130,6 +135,7 @@ services:
     restart: always
 
   watchtower:
+    container_name: watchtower
     image: containrrr/watchtower
     restart: always
     volumes:
