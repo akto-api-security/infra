@@ -1,43 +1,33 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   Akto mini-runtime PrivateLink consumer. Run in each account (once per VPC)
-  that sends traffic to Akto. Creates an interface endpoint to the Akto
-  endpoint service and a private hosted zone so NlbHostname resolves to this
-  endpoint. Clients use NlbHostname:9092 (Kafka) and NlbHostname:9091 (data
-  ingestion).
+  whose clients call Akto data ingestion. Creates an interface endpoint to the
+  Akto endpoint service. Clients call the DataIngestionUrl output (the
+  endpoint's DNS name on port 9091).
 Parameters:
   EndpointServiceName:
     Type: String
     Description: >-
-      EndpointServiceName output of the provider stack
+      EndpointServiceName output of the mini-runtime stack
       (com.amazonaws.vpce.<region>.vpce-svc-xxxxxxxx).
   VpcId:
     Type: 'AWS::EC2::VPC::Id'
-    Description: VPC where the Akto agents run. Needs DNS resolution and DNS hostnames enabled.
+    Description: VPC where the clients run. Needs DNS resolution enabled.
   SubnetIds:
     Type: 'List<AWS::EC2::Subnet::Id>'
     Description: >-
-      Subnets for the endpoint, at most one per AZ. At least one must be in an
-      AZ ID listed in the provider's NlbAvailabilityZoneIds output.
+      Subnets for the endpoint, at most one per AZ. Each must be in an AZ
+      (matched by AZ ID) where the mini-runtime NLB has a subnet.
   IngressCidr:
     Type: String
-    Description: CIDR allowed to reach the endpoint on TCP 9092 and 9091 (e.g. this VPC's CIDR).
-  NlbHostname:
-    Type: String
-    Default: aktonlb.internal
-    Description: Must match NlbHostname in the mini-runtime stack.
+    Description: CIDR allowed to reach the endpoint on TCP 9091 (e.g. this VPC's CIDR).
 Resources:
   AktoEndpointSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Akto NLB PrivateLink endpoint (TCP 9092, 9091)
+      GroupDescription: Akto NLB PrivateLink endpoint (TCP 9091)
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 9092
-          ToPort: 9092
-          CidrIp: !Ref IngressCidr
-          Description: Akto agents to Kafka
         - IpProtocol: tcp
           FromPort: 9091
           ToPort: 9091
@@ -53,29 +43,12 @@ Resources:
       SecurityGroupIds:
         - !Ref AktoEndpointSecurityGroup
       PrivateDnsEnabled: false
-  AktoNlbHostedZone:
-    Type: 'AWS::Route53::HostedZone'
-    Properties:
-      Name: !Ref NlbHostname
-      HostedZoneConfig:
-        Comment: Akto NLB hostname -> Akto PrivateLink endpoint
-      VPCs:
-        - VPCId: !Ref VpcId
-          VPCRegion: !Ref 'AWS::Region'
-  AktoNlbRecord:
-    Type: 'AWS::Route53::RecordSet'
-    Properties:
-      HostedZoneId: !Ref AktoNlbHostedZone
-      Name: !Ref NlbHostname
-      Type: A
-      # The first DnsEntries item is the regional name, formatted "<zoneId>:<dnsName>"
-      AliasTarget:
-        HostedZoneId: !Select [0, !Split [':', !Select [0, !GetAtt AktoVpcEndpoint.DnsEntries]]]
-        DNSName: !Select [1, !Split [':', !Select [0, !GetAtt AktoVpcEndpoint.DnsEntries]]]
-        EvaluateTargetHealth: false
 Outputs:
   VpcEndpointId:
     Value: !Ref AktoVpcEndpoint
-  KafkaBootstrap:
-    Description: Configure Akto agents with this bootstrap server
-    Value: !Sub '${NlbHostname}:9092'
+  DataIngestionUrl:
+    Description: Clients in this VPC call this URL
+    # The first DnsEntries item is the regional name, formatted "<zoneId>:<dnsName>"
+    Value: !Sub
+      - 'http://${DnsName}:9091'
+      - DnsName: !Select [1, !Split [':', !Select [0, !GetAtt AktoVpcEndpoint.DnsEntries]]]

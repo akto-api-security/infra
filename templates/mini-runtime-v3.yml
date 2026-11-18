@@ -20,15 +20,9 @@ Parameters:
     Type: CommaDelimitedList
     Default: ''
     Description: >-
-      Optional. AWS account IDs allowed to reach the Akto NLB (Kafka 9092, data
-      ingestion 9091) over PrivateLink, comma separated with no spaces (e.g.
+      Optional. AWS account IDs allowed to reach the Akto NLB (data ingestion
+      9091) over PrivateLink, comma separated with no spaces (e.g.
       111111111111,222222222222). Leave empty to disable PrivateLink.
-  NlbHostname:
-    Type: String
-    Default: aktonlb.internal
-    Description: >-
-      Used only when PrivateLink is enabled. Private hostname for the Akto NLB
-      (also advertised by Kafka); must match NlbHostname in every consumer stack.
 Conditions:
   EnablePrivateLink: !Not [!Equals [!Join ['', !Ref PrivateLinkAllowedAccountIds], '']]
 Mappings:
@@ -342,11 +336,7 @@ Resources:
                 --query SecretString --output text)
               - '[ -n "$DATABASE_ABSTRACTOR_SERVICE_TOKEN" ] || { echo "Failed to read DatabaseAbstractorToken from Secrets Manager"; exit 1; }'
               - export DATABASE_ABSTRACTOR_SERVICE_TOKEN
-              - !If
-                - EnablePrivateLink
-                # Referencing AktoNlbRecord makes instances launch after the DNS record exists
-                - !Sub "export AKTO_KAFKA_IP=${NlbHostname} # dns record: ${AktoNlbRecord}"
-                - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
+              - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
               - touch /tmp/hello.txt
               - touch ~/hello.txt
               - sudo yum update -y
@@ -487,9 +477,9 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AktoDataIngestionTargetGroup
-  # PrivateLink: exposes AktoNLB (Kafka 9092, data ingestion 9091) to the allowed
-  # accounts. Created only when PrivateLinkAllowedAccountIds is set. Consumers use
-  # the consumer template.
+  # PrivateLink: exposes AktoNLB (data ingestion 9091) to the allowed accounts.
+  # Created only when PrivateLinkAllowedAccountIds is set. Consumers use the
+  # consumer template and call their endpoint's DNS name on port 9091.
   AktoEndpointService:
     Type: 'AWS::EC2::VPCEndpointService'
     Condition: EnablePrivateLink
@@ -510,28 +500,6 @@ Resources:
           - Ids: !Join
               - ':root,arn:aws:iam::'
               - !Ref PrivateLinkAllowedAccountIds
-  # Resolves NlbHostname to AktoNLB for clients inside this VPC
-  AktoNlbHostedZone:
-    Type: 'AWS::Route53::HostedZone'
-    Condition: EnablePrivateLink
-    Properties:
-      Name: !Ref NlbHostname
-      HostedZoneConfig:
-        Comment: Akto NLB hostname -> Akto NLB
-      VPCs:
-        - VPCId: !GetAtt CustomSourceGetVpcDetails.VpcId
-          VPCRegion: !Ref 'AWS::Region'
-  AktoNlbRecord:
-    Type: 'AWS::Route53::RecordSet'
-    Condition: EnablePrivateLink
-    Properties:
-      HostedZoneId: !Ref AktoNlbHostedZone
-      Name: !Ref NlbHostname
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt AktoNLB.DNSName
-        HostedZoneId: !GetAtt AktoNLB.CanonicalHostedZoneID
-        EvaluateTargetHealth: false
   DashboardInstanceRefreshHandler:
     Type: 'AWS::Lambda::Function'
     Properties:
@@ -684,13 +652,8 @@ Outputs:
     Condition: EnablePrivateLink
     Description: Give this to each consumer account (EndpointServiceName parameter of the consumer stack)
     Value: !Sub 'com.amazonaws.vpce.${AWS::Region}.${AktoEndpointService}'
-  KafkaBootstrap:
-    Condition: EnablePrivateLink
-    Description: Bootstrap server for agents in consumer accounts
-    Value: !Sub '${NlbHostname}:9092'
   DataIngestionUrl:
-    Description: Data ingestion endpoint (NLB hostname when PrivateLink is enabled)
-    Value: !If
-      - EnablePrivateLink
-      - !Sub 'http://${NlbHostname}:9091'
-      - !Sub 'http://${AktoNLB.DNSName}:9091'
+    Description: >-
+      Data ingestion endpoint for clients in this VPC. Clients in consumer VPCs
+      use the DataIngestionUrl output of their consumer stack.
+    Value: !Sub 'http://${AktoNLB.DNSName}:9091'
