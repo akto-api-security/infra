@@ -145,7 +145,7 @@ Resources:
   GetVpcDetailsLambda:
     Type: 'AWS::Lambda::Function'
     Properties:
-      Description: Look up the VPC and open Akto ports on the Akto security group
+      Description: Look up info from a VPC
       Handler: index.handler
       Runtime: nodejs24.x
       Timeout: 30
@@ -157,9 +157,7 @@ Resources:
           SUBNET_ID: !Select [0, !Ref SubnetId]
       Code:
         ZipFile: |
-          const {
-            EC2Client, DescribeSubnetsCommand, DescribeVpcsCommand, AuthorizeSecurityGroupIngressCommand,
-          } = require('@aws-sdk/client-ec2');
+          const { EC2Client, DescribeSubnetsCommand } = require('@aws-sdk/client-ec2');
           const ec2 = new EC2Client({});
 
           async function sendResponse(event, context, status, data, reason) {
@@ -175,10 +173,6 @@ Resources:
             await fetch(event.ResponseURL, { method: 'PUT', headers: { 'Content-Type': '' }, body });
           }
 
-          // Used by two custom resources:
-          //  - CustomSourceGetVpcDetails: returns the VpcId of SUBNET_ID
-          //  - CustomSourceConfigureSecurityGroups: opens each "protocol:port" in Ports on
-          //    SecurityGroupId from every CIDR associated with the VPC
           exports.handler = async (event, context) => {
             try {
               if (event.RequestType === 'Delete') {
@@ -193,32 +187,6 @@ Resources:
                 throw new Error('Could not find subnet ' + subnetId);
               }
               console.log('Found VpcId', subnet.VpcId);
-              const props = event.ResourceProperties || {};
-              if (props.SecurityGroupId) {
-                const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [subnet.VpcId] }));
-                const cidrs = vpcResp.Vpcs[0].CidrBlockAssociationSet
-                  .filter((a) => a.CidrBlockState.State === 'associated')
-                  .map((a) => a.CidrBlock);
-                console.log('VPC CIDRs', cidrs);
-                for (const spec of props.Ports || []) {
-                  const [protocol, port] = spec.split(':');
-                  for (const cidr of cidrs) {
-                    try {
-                      await ec2.send(new AuthorizeSecurityGroupIngressCommand({
-                        GroupId: props.SecurityGroupId,
-                        IpPermissions: [{
-                          IpProtocol: protocol, FromPort: Number(port), ToPort: Number(port),
-                          IpRanges: [{ CidrIp: cidr }],
-                        }],
-                      }));
-                      console.log('Opened', spec, 'from', cidr);
-                    } catch (err) {
-                      if (err.name !== 'InvalidPermission.Duplicate' && err.Code !== 'InvalidPermission.Duplicate') throw err;
-                      console.log('Already open', spec, 'from', cidr);
-                    }
-                  }
-                }
-              }
               await sendResponse(event, context, 'SUCCESS', { VpcId: subnet.VpcId });
             } catch (err) {
               console.error(err);
@@ -389,12 +357,12 @@ Resources:
         - !Ref AktoDataIngestionTargetGroup
       MaxSize: '10'
       MinSize: '1'
+      DefaultInstanceWarmup: 600
   AktoTargetTrackingNetworkPolicy:
     Type: 'AWS::AutoScaling::ScalingPolicy'
     Properties:
       PolicyType: TargetTrackingScaling
       AutoScalingGroupName: !Ref AktoAutoScalingGroup
-      EstimatedInstanceWarmup: 200
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
           PredefinedMetricType: ASGAverageNetworkIn
@@ -608,29 +576,89 @@ Resources:
               - 'ec2:CreateLaunchTemplateVersion'
             Resource: !Sub >-
               arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:launch-template/${AktoLaunchTemplate}
-  # Separate from the role to avoid a circular dependency
-  # (role -> security group -> VPC lookup -> Lambda -> role)
-  GetVpcDetailsLambdaSecurityGroupPolicy:
-    Type: 'AWS::IAM::Policy'
+  # Opens Akto ports on AktoSecurityGroup from every CIDR of the VPC. Same resource names
+  # as before so in-place stack updates modify this Lambda instead of replacing it.
+  # The code is inline so a stack update always deploys the current version.
+  ConfigureSecurityGroupsLambda:
+    Type: 'AWS::Lambda::Function'
     Properties:
-      PolicyName: ConfigureAktoSecurityGroup
-      Roles:
-        - !Ref GetVpcDetailsLambdaRole
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Action:
-              - 'ec2:AuthorizeSecurityGroupIngress'
-            Resource: !Sub >-
-              arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
-  CustomSourceConfigureSecurityGroups:
+      Description: Open Akto ports on the Akto security group
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Timeout: 30
+      Role: !GetAtt
+        - ConfigureSecurityGroupsLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          SUBNET_ID: !Select [0, !Ref SubnetId]
+      Code:
+        ZipFile: |
+          const {
+            EC2Client, DescribeSubnetsCommand, DescribeVpcsCommand, AuthorizeSecurityGroupIngressCommand,
+          } = require('@aws-sdk/client-ec2');
+          const ec2 = new EC2Client({});
+
+          async function sendResponse(event, context, status, data, reason) {
+            const body = JSON.stringify({
+              Status: status,
+              Reason: reason || `See CloudWatch log stream: ${context.logStreamName}`,
+              PhysicalResourceId: event.PhysicalResourceId || context.logStreamName,
+              StackId: event.StackId,
+              RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId,
+              Data: data || {},
+            });
+            await fetch(event.ResponseURL, { method: 'PUT', headers: { 'Content-Type': '' }, body });
+          }
+
+          // Opens each "protocol:port" in Ports on SecurityGroupId from every CIDR
+          // associated with the VPC. Rules that already exist are skipped.
+          exports.handler = async (event, context) => {
+            try {
+              if (event.RequestType === 'Delete') {
+                await sendResponse(event, context, 'SUCCESS');
+                return;
+              }
+              const props = event.ResourceProperties;
+              const subnetResp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: [process.env.SUBNET_ID] }));
+              const vpcId = subnetResp.Subnets[0].VpcId;
+              const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+              const cidrs = vpcResp.Vpcs[0].CidrBlockAssociationSet
+                .filter((a) => a.CidrBlockState.State === 'associated')
+                .map((a) => a.CidrBlock);
+              console.log('VPC', vpcId, 'CIDRs', cidrs);
+              for (const spec of props.Ports) {
+                const [protocol, port] = spec.split(':');
+                for (const cidr of cidrs) {
+                  try {
+                    await ec2.send(new AuthorizeSecurityGroupIngressCommand({
+                      GroupId: props.SecurityGroupId,
+                      IpPermissions: [{
+                        IpProtocol: protocol, FromPort: Number(port), ToPort: Number(port),
+                        IpRanges: [{ CidrIp: cidr }],
+                      }],
+                    }));
+                    console.log('Opened', spec, 'from', cidr);
+                  } catch (err) {
+                    if (err.name !== 'InvalidPermission.Duplicate' && err.Code !== 'InvalidPermission.Duplicate') throw err;
+                    console.log('Already open', spec, 'from', cidr);
+                  }
+                }
+              }
+              await sendResponse(event, context, 'SUCCESS');
+            } catch (err) {
+              console.error(err);
+              await sendResponse(event, context, 'FAILED', {}, String(err));
+            }
+          };
+  CustomSourceConfigureSecurityGroupsLambda:
     Type: 'AWS::CloudFormation::CustomResource'
-    DependsOn:
-      - GetVpcDetailsLambdaLogsPolicy
-      - GetVpcDetailsLambdaSecurityGroupPolicy
+    DependsOn: ConfigureSecurityGroupsLambdaLogsPolicy
     Properties:
-      ServiceToken: !GetAtt GetVpcDetailsLambda.Arn
+      ServiceToken: !GetAtt
+        - ConfigureSecurityGroupsLambda
+        - Arn
       SecurityGroupId: !Ref AktoSecurityGroup
       # protocol:port opened from every VPC CIDR. To open a new port, add it here and
       # update the stack; the Lambda re-runs and adds only the missing rules.
@@ -640,6 +668,55 @@ Resources:
         - 'tcp:8000'
         - 'tcp:9092'
         - 'tcp:9091'
+  ConfigureSecurityGroupsLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      # The security group permission is part of the role from creation, so it is
+      # in effect long before the Lambda runs
+      Policies:
+        - PolicyName: DescribeAssetsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                # These Describe actions do not support resource-level permissions
+                Action:
+                  - 'ec2:DescribeVpcs'
+                  - 'ec2:DescribeSubnets'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource:
+                  - !Sub >-
+                    arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
+  # Separate from the role to avoid a circular dependency (role -> Lambda name -> role)
+  ConfigureSecurityGroupsLambdaLogsPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: AWSLambdaBasicExecutionRole
+      Roles:
+        - !Ref ConfigureSecurityGroupsLambdaRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: !Sub >-
+              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ConfigureSecurityGroupsLambda}:*
 Outputs:
   AktoNLB:
     Description: The IP address of the AktoNLB
