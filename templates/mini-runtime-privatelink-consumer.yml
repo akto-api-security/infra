@@ -1,9 +1,10 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   Akto mini-runtime PrivateLink consumer. Run in each account (once per VPC)
-  that sends traffic to Akto Kafka. Creates an interface endpoint to the Akto
-  endpoint service and a private hosted zone so Kafka's advertised hostname
-  resolves to this endpoint. Agents then use KafkaHostname:9092 as bootstrap.
+  that sends traffic to Akto. Creates an interface endpoint to the Akto
+  endpoint service and a private hosted zone so NlbHostname resolves to this
+  endpoint. Clients use NlbHostname:9092 (Kafka) and NlbHostname:9091 (data
+  ingestion).
 Parameters:
   EndpointServiceName:
     Type: String
@@ -20,16 +21,16 @@ Parameters:
       AZ ID listed in the provider's NlbAvailabilityZoneIds output.
   IngressCidr:
     Type: String
-    Description: CIDR allowed to reach the endpoint on TCP 9092 (e.g. this VPC's CIDR).
-  KafkaHostname:
+    Description: CIDR allowed to reach the endpoint on TCP 9092 and 9091 (e.g. this VPC's CIDR).
+  NlbHostname:
     Type: String
     Default: aktonlb.internal
-    Description: Must match KafkaHostname in the provider stack.
+    Description: Must match NlbHostname in the mini-runtime stack.
 Resources:
   AktoEndpointSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Akto Kafka PrivateLink endpoint (TCP 9092)
+      GroupDescription: Akto NLB PrivateLink endpoint (TCP 9092, 9091)
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -37,6 +38,11 @@ Resources:
           ToPort: 9092
           CidrIp: !Ref IngressCidr
           Description: Akto agents to Kafka
+        - IpProtocol: tcp
+          FromPort: 9091
+          ToPort: 9091
+          CidrIp: !Ref IngressCidr
+          Description: Clients to Akto data ingestion (HTTP)
   AktoVpcEndpoint:
     Type: 'AWS::EC2::VPCEndpoint'
     Properties:
@@ -47,20 +53,20 @@ Resources:
       SecurityGroupIds:
         - !Ref AktoEndpointSecurityGroup
       PrivateDnsEnabled: false
-  KafkaHostedZone:
+  AktoNlbHostedZone:
     Type: 'AWS::Route53::HostedZone'
     Properties:
-      Name: !Ref KafkaHostname
+      Name: !Ref NlbHostname
       HostedZoneConfig:
-        Comment: Akto Kafka advertised hostname -> Akto PrivateLink endpoint
+        Comment: Akto NLB hostname -> Akto PrivateLink endpoint
       VPCs:
         - VPCId: !Ref VpcId
           VPCRegion: !Ref 'AWS::Region'
-  KafkaRecord:
+  AktoNlbRecord:
     Type: 'AWS::Route53::RecordSet'
     Properties:
-      HostedZoneId: !Ref KafkaHostedZone
-      Name: !Ref KafkaHostname
+      HostedZoneId: !Ref AktoNlbHostedZone
+      Name: !Ref NlbHostname
       Type: A
       # The first DnsEntries item is the regional name, formatted "<zoneId>:<dnsName>"
       AliasTarget:
@@ -72,4 +78,4 @@ Outputs:
     Value: !Ref AktoVpcEndpoint
   KafkaBootstrap:
     Description: Configure Akto agents with this bootstrap server
-    Value: !Sub '${KafkaHostname}:9092'
+    Value: !Sub '${NlbHostname}:9092'

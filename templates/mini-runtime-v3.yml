@@ -20,15 +20,15 @@ Parameters:
     Type: CommaDelimitedList
     Default: ''
     Description: >-
-      Optional. AWS account IDs allowed to send to Kafka over PrivateLink, comma
-      separated with no spaces (e.g. 111111111111,222222222222). Leave empty to
-      disable PrivateLink.
-  KafkaHostname:
+      Optional. AWS account IDs allowed to reach the Akto NLB (Kafka 9092, data
+      ingestion 9091) over PrivateLink, comma separated with no spaces (e.g.
+      111111111111,222222222222). Leave empty to disable PrivateLink.
+  NlbHostname:
     Type: String
     Default: aktonlb.internal
     Description: >-
-      Used only when PrivateLink is enabled. Hostname Kafka advertises; must
-      match KafkaHostname in every consumer stack.
+      Used only when PrivateLink is enabled. Private hostname for the Akto NLB
+      (also advertised by Kafka); must match NlbHostname in every consumer stack.
 Conditions:
   EnablePrivateLink: !Not [!Equals [!Join ['', !Ref PrivateLinkAllowedAccountIds], '']]
 Mappings:
@@ -151,7 +151,7 @@ Resources:
   GetVpcDetailsLambda:
     Type: 'AWS::Lambda::Function'
     Properties:
-      Description: Look up info from a VPC
+      Description: Look up the VPC and open Akto ports on the Akto security group
       Handler: index.handler
       Runtime: nodejs24.x
       Timeout: 30
@@ -163,7 +163,9 @@ Resources:
           SUBNET_ID: !Select [0, !Ref SubnetId]
       Code:
         ZipFile: |
-          const { EC2Client, DescribeSubnetsCommand } = require('@aws-sdk/client-ec2');
+          const {
+            EC2Client, DescribeSubnetsCommand, DescribeVpcsCommand, AuthorizeSecurityGroupIngressCommand,
+          } = require('@aws-sdk/client-ec2');
           const ec2 = new EC2Client({});
 
           async function sendResponse(event, context, status, data, reason) {
@@ -179,6 +181,10 @@ Resources:
             await fetch(event.ResponseURL, { method: 'PUT', headers: { 'Content-Type': '' }, body });
           }
 
+          // Used by two custom resources:
+          //  - CustomSourceGetVpcDetails: returns the VpcId of SUBNET_ID
+          //  - CustomSourceConfigureSecurityGroups: opens each "protocol:port" in Ports on
+          //    SecurityGroupId from every CIDR associated with the VPC
           exports.handler = async (event, context) => {
             try {
               if (event.RequestType === 'Delete') {
@@ -193,6 +199,32 @@ Resources:
                 throw new Error('Could not find subnet ' + subnetId);
               }
               console.log('Found VpcId', subnet.VpcId);
+              const props = event.ResourceProperties || {};
+              if (props.SecurityGroupId) {
+                const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [subnet.VpcId] }));
+                const cidrs = vpcResp.Vpcs[0].CidrBlockAssociationSet
+                  .filter((a) => a.CidrBlockState.State === 'associated')
+                  .map((a) => a.CidrBlock);
+                console.log('VPC CIDRs', cidrs);
+                for (const spec of props.Ports || []) {
+                  const [protocol, port] = spec.split(':');
+                  for (const cidr of cidrs) {
+                    try {
+                      await ec2.send(new AuthorizeSecurityGroupIngressCommand({
+                        GroupId: props.SecurityGroupId,
+                        IpPermissions: [{
+                          IpProtocol: protocol, FromPort: Number(port), ToPort: Number(port),
+                          IpRanges: [{ CidrIp: cidr }],
+                        }],
+                      }));
+                      console.log('Opened', spec, 'from', cidr);
+                    } catch (err) {
+                      if (err.name !== 'InvalidPermission.Duplicate' && err.Code !== 'InvalidPermission.Duplicate') throw err;
+                      console.log('Already open', spec, 'from', cidr);
+                    }
+                  }
+                }
+              }
               await sendResponse(event, context, 'SUCCESS', { VpcId: subnet.VpcId });
             } catch (err) {
               console.error(err);
@@ -312,8 +344,8 @@ Resources:
               - export DATABASE_ABSTRACTOR_SERVICE_TOKEN
               - !If
                 - EnablePrivateLink
-                # Referencing KafkaRecord makes instances launch after the DNS record exists
-                - !Sub "export AKTO_KAFKA_IP=${KafkaHostname} # dns record: ${KafkaRecord}"
+                # Referencing AktoNlbRecord makes instances launch after the DNS record exists
+                - !Sub "export AKTO_KAFKA_IP=${NlbHostname} # dns record: ${AktoNlbRecord}"
                 - !Sub "export AKTO_KAFKA_IP=${AktoNLB.DNSName}"
               - touch /tmp/hello.txt
               - touch ~/hello.txt
@@ -364,6 +396,7 @@ Resources:
       TargetGroupARNs:
         - !Ref AktoTrafficMirroringTargetGroup
         - !Ref AktoKafkaTargetGroup
+        - !Ref AktoDataIngestionTargetGroup
       MaxSize: '10'
       MinSize: '1'
   AktoTargetTrackingNetworkPolicy:
@@ -431,8 +464,32 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AktoKafkaTargetGroup
-  # PrivateLink: exposes AktoNLB (Kafka 9092) to the allowed accounts. Created only
-  # when PrivateLinkAllowedAccountIds is set. Consumers use the consumer template.
+  # Data ingestion HTTP service (host port 9091), exposed on the NLB
+  AktoDataIngestionTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Port: '9091'
+      Protocol: TCP
+      TargetType: instance
+      HealthCheckEnabled: 'true'
+      HealthCheckProtocol: TCP
+      HealthCheckPort: '9091'
+      HealthCheckIntervalSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      VpcId: !GetAtt CustomSourceGetVpcDetails.VpcId
+  AktoDataIngestionListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref AktoNLB
+      Port: '9091'
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AktoDataIngestionTargetGroup
+  # PrivateLink: exposes AktoNLB (Kafka 9092, data ingestion 9091) to the allowed
+  # accounts. Created only when PrivateLinkAllowedAccountIds is set. Consumers use
+  # the consumer template.
   AktoEndpointService:
     Type: 'AWS::EC2::VPCEndpointService'
     Condition: EnablePrivateLink
@@ -453,23 +510,23 @@ Resources:
           - Ids: !Join
               - ':root,arn:aws:iam::'
               - !Ref PrivateLinkAllowedAccountIds
-  # Resolves KafkaHostname to AktoNLB for clients inside this VPC
-  KafkaHostedZone:
+  # Resolves NlbHostname to AktoNLB for clients inside this VPC
+  AktoNlbHostedZone:
     Type: 'AWS::Route53::HostedZone'
     Condition: EnablePrivateLink
     Properties:
-      Name: !Ref KafkaHostname
+      Name: !Ref NlbHostname
       HostedZoneConfig:
-        Comment: Akto Kafka advertised hostname -> Akto NLB
+        Comment: Akto NLB hostname -> Akto NLB
       VPCs:
         - VPCId: !GetAtt CustomSourceGetVpcDetails.VpcId
           VPCRegion: !Ref 'AWS::Region'
-  KafkaRecord:
+  AktoNlbRecord:
     Type: 'AWS::Route53::RecordSet'
     Condition: EnablePrivateLink
     Properties:
-      HostedZoneId: !Ref KafkaHostedZone
-      Name: !Ref KafkaHostname
+      HostedZoneId: !Ref AktoNlbHostedZone
+      Name: !Ref NlbHostname
       Type: A
       AliasTarget:
         DNSName: !GetAtt AktoNLB.DNSName
@@ -583,81 +640,38 @@ Resources:
               - 'ec2:CreateLaunchTemplateVersion'
             Resource: !Sub >-
               arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:launch-template/${AktoLaunchTemplate}
-  ConfigureSecurityGroupsLambda:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Description: >-
-        Configure Security Groups for Runtime processor and Context analyzer
-        instances
-      Handler: lambda.lambda_handler
-      Runtime: python3.13
-      Timeout: 30
-      Role: !GetAtt
-        - ConfigureSecurityGroupsLambdaRole
-        - Arn
-      Environment:
-        Variables:
-          SUBNET_ID: !Select [0, !Ref SubnetId]
-          CONTEXT_ANALYZER_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          RUNTIME_PROCESSOR_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          MODE: RUNTIME
-      Code:
-        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
-        S3Key: templates/configure_security_groups.zip
-  CustomSourceConfigureSecurityGroupsLambda:
-    Type: 'AWS::CloudFormation::CustomResource'
-    DependsOn: ConfigureSecurityGroupsLambdaLogsPolicy
-    Properties:
-      ServiceToken: !GetAtt
-        - ConfigureSecurityGroupsLambda
-        - Arn
-  ConfigureSecurityGroupsLambdaRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /
-      Policies:
-        - PolicyName: DescribeAssetsPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                # These Describe actions do not support resource-level permissions
-                Action:
-                  - 'ec2:DescribeVpcs'
-                  - 'ec2:DescribeSubnets'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'ec2:AuthorizeSecurityGroupIngress'
-                Resource:
-                  - !Sub >-
-                    arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
-  # Separate from the role to avoid a circular dependency (role -> Lambda name -> role)
-  ConfigureSecurityGroupsLambdaLogsPolicy:
+  # Separate from the role to avoid a circular dependency
+  # (role -> security group -> VPC lookup -> Lambda -> role)
+  GetVpcDetailsLambdaSecurityGroupPolicy:
     Type: 'AWS::IAM::Policy'
     Properties:
-      PolicyName: AWSLambdaBasicExecutionRole
+      PolicyName: ConfigureAktoSecurityGroup
       Roles:
-        - !Ref ConfigureSecurityGroupsLambdaRole
+        - !Ref GetVpcDetailsLambdaRole
       PolicyDocument:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
             Action:
-              - 'logs:CreateLogGroup'
-              - 'logs:CreateLogStream'
-              - 'logs:PutLogEvents'
+              - 'ec2:AuthorizeSecurityGroupIngress'
             Resource: !Sub >-
-              arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ConfigureSecurityGroupsLambda}:*
+              arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${AktoSecurityGroup}
+  CustomSourceConfigureSecurityGroups:
+    Type: 'AWS::CloudFormation::CustomResource'
+    DependsOn:
+      - GetVpcDetailsLambdaLogsPolicy
+      - GetVpcDetailsLambdaSecurityGroupPolicy
+    Properties:
+      ServiceToken: !GetAtt GetVpcDetailsLambda.Arn
+      SecurityGroupId: !Ref AktoSecurityGroup
+      # protocol:port opened from every VPC CIDR. To open a new port, add it here and
+      # update the stack; the Lambda re-runs and adds only the missing rules.
+      Ports:
+        - 'tcp:22'
+        - 'udp:4789'
+        - 'tcp:8000'
+        - 'tcp:9092'
+        - 'tcp:9091'
 Outputs:
   AktoNLB:
     Description: The IP address of the AktoNLB
@@ -673,4 +687,10 @@ Outputs:
   KafkaBootstrap:
     Condition: EnablePrivateLink
     Description: Bootstrap server for agents in consumer accounts
-    Value: !Sub '${KafkaHostname}:9092'
+    Value: !Sub '${NlbHostname}:9092'
+  DataIngestionUrl:
+    Description: Data ingestion endpoint (NLB hostname when PrivateLink is enabled)
+    Value: !If
+      - EnablePrivateLink
+      - !Sub 'http://${NlbHostname}:9091'
+      - !Sub 'http://${AktoNLB.DNSName}:9091'
