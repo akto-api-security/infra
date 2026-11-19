@@ -16,11 +16,21 @@ Parameters:
   SubnetIds:
     Type: 'List<AWS::EC2::Subnet::Id>'
     Description: >-
-      Subnets for the endpoint, at most one per AZ. Each must be in an AZ
-      (matched by AZ ID) where the mini-runtime NLB has a subnet.
+      Subnets for the endpoint, at most one per AZ. If the mini-runtime stack is
+      in this same region, each must be in an AZ (matched by AZ ID) where the
+      mini-runtime NLB has a subnet.
   IngressCidr:
     Type: String
     Description: CIDR allowed to reach the endpoint on TCP 9091 (e.g. this VPC's CIDR).
+  ServiceRegion:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional. Region of the mini-runtime stack (its EndpointServiceRegion
+      output), only if it differs from this stack's region. Leave empty if both
+      are in the same region.
+Conditions:
+  HasServiceRegion: !Not [!Equals [!Ref ServiceRegion, '']]
 Resources:
   AktoEndpointSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -38,6 +48,8 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       ServiceName: !Ref EndpointServiceName
+      # Cross-region PrivateLink: region of the endpoint service, when it is not this region
+      ServiceRegion: !If [HasServiceRegion, !Ref ServiceRegion, !Ref 'AWS::NoValue']
       VpcId: !Ref VpcId
       SubnetIds: !Ref SubnetIds
       SecurityGroupIds:

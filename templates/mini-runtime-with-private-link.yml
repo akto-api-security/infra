@@ -23,8 +23,16 @@ Parameters:
       Optional. AWS account IDs allowed to reach the Akto NLB (data ingestion
       9091) over PrivateLink, comma separated with no spaces (e.g.
       111111111111,222222222222). Leave empty to disable PrivateLink.
+  PrivateLinkSupportedRegions:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: >-
+      Optional. Other AWS regions whose VPCs may connect over PrivateLink, comma
+      separated with no spaces (e.g. us-east-1,eu-west-1). This stack's own
+      region is always allowed. Leave empty if all VPCs are in this region.
 Conditions:
   EnablePrivateLink: !Not [!Equals [!Join ['', !Ref PrivateLinkAllowedAccountIds], '']]
+  HasPrivateLinkSupportedRegions: !Not [!Equals [!Join ['', !Ref PrivateLinkSupportedRegions], '']]
 Mappings:
   RegionMap:
     af-south-1:
@@ -455,6 +463,11 @@ Resources:
       NetworkLoadBalancerArns:
         - !Ref AktoNLB
       AcceptanceRequired: false
+      # Cross-region PrivateLink: other regions allowed to create endpoints to this service
+      SupportedRegions: !If
+        - HasPrivateLinkSupportedRegions
+        - !Ref PrivateLinkSupportedRegions
+        - !Ref 'AWS::NoValue'
   AktoEndpointServicePermissions:
     Type: 'AWS::EC2::VPCEndpointServicePermissions'
     Condition: EnablePrivateLink
@@ -729,6 +742,12 @@ Outputs:
     Condition: EnablePrivateLink
     Description: Give this to each consumer account (EndpointServiceName parameter of the consumer stack)
     Value: !Sub 'com.amazonaws.vpce.${AWS::Region}.${AktoEndpointService}'
+  EndpointServiceRegion:
+    Condition: EnablePrivateLink
+    Description: >-
+      Region of the endpoint service. Consumers in other regions enter it as
+      ServiceRegion in the consumer stack.
+    Value: !Ref 'AWS::Region'
   DataIngestionUrl:
     Description: >-
       Data ingestion endpoint for clients in this VPC. Clients in consumer VPCs
