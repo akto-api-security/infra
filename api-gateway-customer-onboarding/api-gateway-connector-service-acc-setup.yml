@@ -21,7 +21,6 @@ Metadata:
       - Label:
           default: Cross-account access
         Parameters:
-          - CrossAccountRoleArns
           - CrossAccountExternalId
           - LogGroupPrefix
 
@@ -52,17 +51,6 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Database abstractor token from Akto Dashboard.
-
-  CrossAccountRoleArns:
-    Type: CommaDelimitedList
-    Description: >-
-      Comma-separated RoleArn(s) output by running akto-cross-account-role-scoped.yml in each
-      target AWS account, deployed in this SAME region as this stack - the connector only reads
-      each account's resources in its own region. Scopes this instance's own IAM permissions to
-      exactly these roles. You must ALSO add these same ARNs in the Akto dashboard (AWS Role
-      ARNs field for this account) - the dashboard-managed list is what actually tells the
-      connector which accounts to monitor; this parameter only limits what this instance is
-      allowed to assume.
 
   CrossAccountExternalId:
     Type: String
@@ -108,7 +96,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: sts:AssumeRole
-                Resource: !Ref CrossAccountRoleArns
+                Resource: 'arn:aws:iam::*:role/akto/*'
         - PolicyName: ReadDatabaseAbstractorTokenSecret
           PolicyDocument:
             Version: '2012-10-17'
@@ -182,7 +170,6 @@ Resources:
               CLOUDWATCH_READ_BATCH_SIZE=5
               AWS_REGION=${AWS::Region}
               DATABASE_ABSTRACTOR_TOKEN=$DATABASE_ABSTRACTOR_TOKEN
-              CROSS_ACCOUNT_ROLE_ARN=${CrossAccountRoleArnsStr}
               CROSS_ACCOUNT_EXTERNAL_ID=${CrossAccountExternalId}
               LOG_GROUP_PREFIX=${LogGroupPrefix}
               DISCOVER_OPENAPI_SPEC=true
@@ -218,7 +205,7 @@ Resources:
 
               cd /opt/akto-connector
               docker compose up -d
-            - CrossAccountRoleArnsStr: !Join [",", !Ref CrossAccountRoleArns]
+            - {}
 
 Outputs:
   ConnectorInstanceId:
@@ -233,9 +220,3 @@ Outputs:
     Description: Security group ID attached to connector EC2
     Value: !Ref ConnectorSecurityGroup
 
-  ConfiguredCrossAccountRoleArns:
-    Description: >-
-      Role ARNs this instance is allowed to assume. Reminder: also add these same ARNs in the
-      Akto dashboard (AWS Role ARNs field) - the dashboard list is what the connector actually
-      monitors, this instance's IAM permissions only cap what it's allowed to reach.
-    Value: !Join [",", !Ref CrossAccountRoleArns]

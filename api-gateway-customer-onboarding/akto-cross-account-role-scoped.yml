@@ -20,6 +20,17 @@ Parameters:
     Description: >
       Unique value that must be presented on every AssumeRole call, so knowing
       the account ID and role name alone is not enough to assume this role.
+  Regions:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: >
+      Comma-separated additional regions to grant access to, e.g.
+      us-west-2,eu-west-1. This stack's region is always included. Leave
+      blank for this stack's region only.
+
+Conditions:
+  HasRegions: !Not [!Equals [!Join ['', !Ref Regions], '']]
+
 Resources:
   AktoCrossAccountRole:
     Type: AWS::IAM::Role
@@ -46,7 +57,7 @@ Resources:
               - Sid: ListLogGroups
                 Effect: Allow
                 Action: logs:DescribeLogGroups
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+                Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
               - Sid: ReadApiGatewayExecutionLogs
                 Effect: Allow
                 Action:
@@ -54,17 +65,17 @@ Resources:
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*:*'
+                  - !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*'
+                  - !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:API-Gateway-Execution-Logs*:*'
               - Sid: DiscoverApiGatewaySpecs
                 Effect: Allow
                 Action:
                   - apigateway:GET
                 Resource:
-                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis'
-                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/*'
-                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis'
-                  - !Sub 'arn:aws:apigateway:${AWS::Region}::/apis/*'
+                  - 'arn:aws:apigateway:*::/restapis'
+                  - 'arn:aws:apigateway:*::/restapis/*'
+                  - 'arn:aws:apigateway:*::/apis'
+                  - 'arn:aws:apigateway:*::/apis/*'
 
 Outputs:
   RoleArn:
@@ -72,4 +83,4 @@ Outputs:
     Value: !GetAtt AktoCrossAccountRole.Arn
   Region:
     Description: Region this role grants access to. Share with Akto.
-    Value: !Ref 'AWS::Region'
+    Value: !If [HasRegions, !Join [',', [!Ref 'AWS::Region', !Join [',', !Ref Regions]]], !Ref 'AWS::Region']
