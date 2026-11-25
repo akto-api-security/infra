@@ -16,6 +16,14 @@ Parameters:
   DatabaseAbstractorToken:
     Type: String
     NoEcho: true
+  AmiId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional AMI ID for the Akto instance. Leave empty to use the default AMI
+      for this region.
+Conditions:
+  UseDefaultAmi: !Equals [!Ref AmiId, '']
 Mappings:
   RegionMap:
     af-south-1:
@@ -262,10 +270,13 @@ Resources:
     Properties:
       LaunchTemplateName: AktoLaunchTemplate
       LaunchTemplateData:
-        ImageId: !FindInMap
-          - RegionMap
-          - !Ref 'AWS::Region'
-          - AMI
+        ImageId: !If
+          - UseDefaultAmi
+          - !FindInMap
+            - RegionMap
+            - !Ref 'AWS::Region'
+            - AMI
+          - !Ref AmiId
         InstanceType: m5a.xlarge
         KeyName: !Ref KeyPair
         NetworkInterfaces:

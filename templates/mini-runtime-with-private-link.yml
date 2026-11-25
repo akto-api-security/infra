@@ -30,9 +30,16 @@ Parameters:
       Optional. Other AWS regions whose VPCs may connect over PrivateLink, comma
       separated with no spaces (e.g. us-east-1,eu-west-1). This stack's own
       region is always allowed. Leave empty if all VPCs are in this region.
+  AmiId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional AMI ID for the Akto instance. Leave empty to use the default AMI
+      for this region.
 Conditions:
   EnablePrivateLink: !Not [!Equals [!Join ['', !Ref PrivateLinkAllowedAccountIds], '']]
   HasPrivateLinkSupportedRegions: !Not [!Equals [!Join ['', !Ref PrivateLinkSupportedRegions], '']]
+  UseDefaultAmi: !Equals [!Ref AmiId, '']
 Mappings:
   RegionMap:
     af-south-1:
@@ -279,10 +286,13 @@ Resources:
     Properties:
       LaunchTemplateName: AktoLaunchTemplate
       LaunchTemplateData:
-        ImageId: !FindInMap
-          - RegionMap
-          - !Ref 'AWS::Region'
-          - AMI
+        ImageId: !If
+          - UseDefaultAmi
+          - !FindInMap
+            - RegionMap
+            - !Ref 'AWS::Region'
+            - AMI
+          - !Ref AmiId
         InstanceType: m5a.xlarge
         KeyName: !Ref KeyPair
         NetworkInterfaces:
