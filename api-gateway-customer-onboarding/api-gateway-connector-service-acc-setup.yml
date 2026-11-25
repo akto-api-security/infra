@@ -43,6 +43,13 @@ Parameters:
     Default: c5.large
     Description: EC2 instance type for connector host.
 
+  AmiId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional AMI ID for the connector instance. Leave empty to use the latest Amazon Linux
+      2023 AMI.
+
   AktoKafkaBrokerMal:
     Type: String
     Description: Kafka broker endpoint in format <AktoNLB-DNS>:9092.
@@ -69,6 +76,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPair, '']]
+  UseDefaultAmi: !Equals [!Ref AmiId, '']
 
 Resources:
   DatabaseAbstractorTokenSecret:
@@ -125,7 +133,10 @@ Resources:
   ConnectorInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      ImageId: !If
+        - UseDefaultAmi
+        - "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+        - !Ref AmiId
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref ConnectorInstanceProfile
       SubnetId: !Ref SubnetId
