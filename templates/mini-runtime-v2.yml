@@ -345,14 +345,15 @@ Resources:
       TargetGroupARNs:
         - !Ref AktoTrafficMirroringTargetGroup
         - !Ref AktoKafkaTargetGroup
+        - !Ref AktoDataIngestionTargetGroup
       MaxSize: '10'
       MinSize: '1'
+      DefaultInstanceWarmup: 600
   AktoTargetTrackingNetworkPolicy:
     Type: 'AWS::AutoScaling::ScalingPolicy'
     Properties:
       PolicyType: TargetTrackingScaling
       AutoScalingGroupName: !Ref AktoAutoScalingGroup
-      EstimatedInstanceWarmup: 30
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
           PredefinedMetricType: ASGAverageNetworkIn
@@ -412,6 +413,29 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AktoKafkaTargetGroup
+  # Data ingestion HTTP service (host port 9091), exposed on the NLB
+  AktoDataIngestionTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Port: '9091'
+      Protocol: TCP
+      TargetType: instance
+      HealthCheckEnabled: 'true'
+      HealthCheckProtocol: TCP
+      HealthCheckPort: '9091'
+      HealthCheckIntervalSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      VpcId: !GetAtt CustomSourceGetVpcDetails.VpcId
+  AktoDataIngestionListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref AktoNLB
+      Port: '9091'
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AktoDataIngestionTargetGroup
   DashboardInstanceRefreshHandler:
     Type: 'AWS::Lambda::Function'
     Properties:
@@ -520,14 +544,15 @@ Resources:
               - 'ec2:CreateLaunchTemplateVersion'
             Resource: !Sub >-
               arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:launch-template/${AktoLaunchTemplate}
+  # Opens Akto ports on AktoSecurityGroup from every CIDR of the VPC. Same resource names
+  # as before so in-place stack updates modify this Lambda instead of replacing it.
+  # The code is inline so a stack update always deploys the current version.
   ConfigureSecurityGroupsLambda:
     Type: 'AWS::Lambda::Function'
     Properties:
-      Description: >-
-        Configure Security Groups for Runtime processor and Context analyzer
-        instances
-      Handler: lambda.lambda_handler
-      Runtime: python3.13
+      Description: Open Akto ports on the Akto security group
+      Handler: index.handler
+      Runtime: nodejs24.x
       Timeout: 30
       Role: !GetAtt
         - ConfigureSecurityGroupsLambdaRole
@@ -535,12 +560,66 @@ Resources:
       Environment:
         Variables:
           SUBNET_ID: !Select [0, !Ref SubnetId]
-          CONTEXT_ANALYZER_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          RUNTIME_PROCESSOR_SECURITY_GROUP_ID: !Ref AktoSecurityGroup
-          MODE: RUNTIME
       Code:
-        S3Bucket: !Sub 'akto-setup-${AWS::Region}'
-        S3Key: templates/configure_security_groups.zip
+        ZipFile: |
+          const {
+            EC2Client, DescribeSubnetsCommand, DescribeVpcsCommand, AuthorizeSecurityGroupIngressCommand,
+          } = require('@aws-sdk/client-ec2');
+          const ec2 = new EC2Client({});
+
+          async function sendResponse(event, context, status, data, reason) {
+            const body = JSON.stringify({
+              Status: status,
+              Reason: reason || `See CloudWatch log stream: ${context.logStreamName}`,
+              PhysicalResourceId: event.PhysicalResourceId || context.logStreamName,
+              StackId: event.StackId,
+              RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId,
+              Data: data || {},
+            });
+            await fetch(event.ResponseURL, { method: 'PUT', headers: { 'Content-Type': '' }, body });
+          }
+
+          // Opens each "protocol:port" in Ports on SecurityGroupId from every CIDR
+          // associated with the VPC. Rules that already exist are skipped.
+          exports.handler = async (event, context) => {
+            try {
+              if (event.RequestType === 'Delete') {
+                await sendResponse(event, context, 'SUCCESS');
+                return;
+              }
+              const props = event.ResourceProperties;
+              const subnetResp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: [process.env.SUBNET_ID] }));
+              const vpcId = subnetResp.Subnets[0].VpcId;
+              const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+              const cidrs = vpcResp.Vpcs[0].CidrBlockAssociationSet
+                .filter((a) => a.CidrBlockState.State === 'associated')
+                .map((a) => a.CidrBlock);
+              console.log('VPC', vpcId, 'CIDRs', cidrs);
+              for (const spec of props.Ports) {
+                const [protocol, port] = spec.split(':');
+                for (const cidr of cidrs) {
+                  try {
+                    await ec2.send(new AuthorizeSecurityGroupIngressCommand({
+                      GroupId: props.SecurityGroupId,
+                      IpPermissions: [{
+                        IpProtocol: protocol, FromPort: Number(port), ToPort: Number(port),
+                        IpRanges: [{ CidrIp: cidr }],
+                      }],
+                    }));
+                    console.log('Opened', spec, 'from', cidr);
+                  } catch (err) {
+                    if (err.name !== 'InvalidPermission.Duplicate' && err.Code !== 'InvalidPermission.Duplicate') throw err;
+                    console.log('Already open', spec, 'from', cidr);
+                  }
+                }
+              }
+              await sendResponse(event, context, 'SUCCESS');
+            } catch (err) {
+              console.error(err);
+              await sendResponse(event, context, 'FAILED', {}, String(err));
+            }
+          };
   CustomSourceConfigureSecurityGroupsLambda:
     Type: 'AWS::CloudFormation::CustomResource'
     DependsOn: ConfigureSecurityGroupsLambdaLogsPolicy
@@ -548,6 +627,15 @@ Resources:
       ServiceToken: !GetAtt
         - ConfigureSecurityGroupsLambda
         - Arn
+      SecurityGroupId: !Ref AktoSecurityGroup
+      # protocol:port opened from every VPC CIDR. To open a new port, add it here and
+      # update the stack; the Lambda re-runs and adds only the missing rules.
+      Ports:
+        - 'tcp:22'
+        - 'udp:4789'
+        - 'tcp:8000'
+        - 'tcp:9092'
+        - 'tcp:9091'
   ConfigureSecurityGroupsLambdaRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -603,3 +691,6 @@ Outputs:
       - DNSName
     Export:
       Name: AktoNLBIP
+  DataIngestionUrl:
+    Description: Data ingestion endpoint for clients in this VPC
+    Value: !Sub 'http://${AktoNLB.DNSName}:9091'
